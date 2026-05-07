@@ -1,0 +1,14 @@
+Attention Is All You Need
+Ashish Vaswani, Noam Shazeer, Niki Parmar, Jakob Uszkoreit
+2017
+arXiv:1706.03762
+
+Abstract
+This paper introduces the Transformer architecture based entirely on self-attention, removing recurrence and convolution.
+
+Methodology
+The model uses multi-head self-attention, position-wise feed-forward layers, residual connections, and layer normalization.
+Training used Adam optimizer with warmup and inverse square root learning rate schedule.
+
+Results
+Transformer achieves state-of-the-art BLEU on WMT 2014 English-to-German and English-to-French translation tasks.

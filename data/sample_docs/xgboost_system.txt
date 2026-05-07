@@ -1,0 +1,16 @@
+XGBoost: A Scalable Tree Boosting System
+Tianqi Chen, Carlos Guestrin
+2016
+
+Abstract
+XGBoost is a scalable gradient boosting framework designed for speed and model performance.
+
+Methodology
+The objective combines a differentiable loss and regularization term.
+The paper describes second-order approximation, sparsity-aware split finding, and distributed training.
+
+Datasets
+The paper evaluates benchmark datasets from classification and ranking tasks including Higgs and Allstate.
+
+Results
+XGBoost consistently outperforms baseline tree boosting systems in training speed and predictive performance.

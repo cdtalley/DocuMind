@@ -1,0 +1,134 @@
+from __future__ import annotations
+
+import logging
+from contextlib import asynccontextmanager
+from pathlib import Path
+
+from fastapi import Depends, FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+
+from app.config import get_settings
+from app.models.response_models import CollectionStats, HealthResponse
+from app.services.document_service import DocumentService
+from app.services.embedding_service import ChromaEmbeddingService
+from app.services.rag_service import RAGService
+from app.utils.chunker import DocumentChunker
+from app.utils.ollama_client import OllamaClient
+
+logging.basicConfig(
+    level=logging.INFO, format="%(asctime)s — %(name)s — %(levelname)s — %(message)s"
+)
+logger = logging.getLogger("documind")
+
+settings = get_settings()
+ollama_client: OllamaClient | None = None
+embedding_service: ChromaEmbeddingService | None = None
+document_service: DocumentService | None = None
+rag_service: RAGService | None = None
+
+
+def seed_sample_docs() -> None:
+    global document_service, embedding_service
+    assert document_service is not None and embedding_service is not None
+    sample_dir = Path("data/sample_docs")
+    if not sample_dir.exists():
+        return
+
+    for sample_file in sample_dir.glob("*.txt"):
+        doc_id = f"sample_{sample_file.stem}"
+        existing = [paper for paper in embedding_service.list_papers() if paper["doc_id"] == doc_id]
+        if existing:
+            continue
+        file_bytes = sample_file.read_bytes()
+        docs, _ = document_service.process(file_bytes, sample_file.name, doc_id)
+        embedding_service.add_documents(docs, doc_id)
+        logger.info("Seeded sample paper: %s", sample_file.name)
+
+
+@asynccontextmanager
+async def lifespan(_: FastAPI):
+    global ollama_client, embedding_service, document_service, rag_service
+    chunker = DocumentChunker(chunk_size=settings.CHUNK_SIZE, chunk_overlap=settings.CHUNK_OVERLAP)
+    ollama_client = OllamaClient(
+        base_url=settings.OLLAMA_BASE_URL,
+        llm_model=settings.LLM_MODEL,
+        embedding_model=settings.EMBEDDING_MODEL,
+    )
+    embedding_service = ChromaEmbeddingService(
+        persist_dir=settings.CHROMA_PERSIST_DIR,
+        collection_name=settings.CHROMA_COLLECTION_NAME,
+        ollama_client=ollama_client,
+    )
+    document_service = DocumentService(chunker=chunker)
+    rag_service = RAGService(embedding_service=embedding_service, ollama_client=ollama_client, settings=settings)
+    logger.info("Ollama health: %s", ollama_client.health_check())
+    try:
+        seed_sample_docs()
+    except Exception as exc:
+        logger.warning("Failed to seed sample docs: %s", exc)
+    yield
+    logger.info("DocuMind shutting down")
+
+
+app = FastAPI(
+    title="DocuMind",
+    description="Data Science Research Paper Intelligence — powered by local Ollama. Zero API costs.",
+    version="1.0.0",
+    lifespan=lifespan,
+)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+
+def get_ollama_client() -> OllamaClient:
+    assert ollama_client is not None
+    return ollama_client
+
+
+def get_embedding_service() -> ChromaEmbeddingService:
+    assert embedding_service is not None
+    return embedding_service
+
+
+def get_document_service() -> DocumentService:
+    assert document_service is not None
+    return document_service
+
+
+def get_rag_service() -> RAGService:
+    assert rag_service is not None
+    return rag_service
+
+
+from app.routers import arxiv, ingest, papers, query  # noqa: E402
+
+app.include_router(ingest.router, prefix="/api/v1", tags=["Ingest"])
+app.include_router(query.router, prefix="/api/v1", tags=["Query"])
+app.include_router(arxiv.router, prefix="/api/v1", tags=["ArXiv"])
+app.include_router(papers.router, prefix="/api/v1", tags=["Papers"])
+
+
+@app.get("/health", response_model=HealthResponse)
+async def health(
+    client: OllamaClient = Depends(get_ollama_client),
+    embedding: ChromaEmbeddingService = Depends(get_embedding_service),
+) -> HealthResponse:
+    status_info = client.health_check()
+    stats = CollectionStats(**embedding.collection_stats())
+    return HealthResponse(
+        status="ok" if status_info["available"] else "degraded",
+        ollama_available=status_info["available"],
+        llm_model=settings.LLM_MODEL,
+        embedding_model=settings.EMBEDDING_MODEL,
+        collection_stats=stats,
+    )
+
+
+@app.get("/")
+async def root() -> dict:
+    return {"message": "DocuMind API", "docs": "/docs", "health": "/health"}

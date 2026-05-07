@@ -1,0 +1,14 @@
+BERT: Pre-training of Deep Bidirectional Transformers for Language Understanding
+Jacob Devlin, Ming-Wei Chang, Kenton Lee, Kristina Toutanova
+2018
+arXiv:1810.04805
+
+Abstract
+BERT proposes deep bidirectional Transformer pre-training with masked language modeling and next sentence prediction.
+
+Methodology
+Pre-training is performed on BooksCorpus and English Wikipedia.
+Fine-tuning is task-specific with minimal architecture changes.
+
+Evaluation
+The paper reports strong performance on GLUE, MultiNLI, SQuAD v1.1, and SQuAD v2.0 benchmarks.

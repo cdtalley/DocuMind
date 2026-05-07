@@ -1,0 +1,62 @@
+[
+  {
+    "question": "What optimizer was used in the Transformer paper?",
+    "query_mode": "methodology",
+    "expected_keywords": ["Adam", "warmup"],
+    "notes": "Optimizer extraction from methodology section"
+  },
+  {
+    "question": "Which datasets benchmark this method?",
+    "query_mode": "datasets",
+    "expected_keywords": ["WMT", "GLUE"],
+    "notes": "Dataset discovery across papers"
+  },
+  {
+    "question": "Compare the two approaches to attention.",
+    "query_mode": "compare",
+    "expected_keywords": ["self-attention", "Transformer"],
+    "notes": "Cross-paper comparative analysis"
+  },
+  {
+    "question": "What is needed to reproduce BERT results?",
+    "query_mode": "reproduce",
+    "expected_keywords": ["BooksCorpus", "Wikipedia"],
+    "notes": "Reproducibility checklist"
+  },
+  {
+    "question": "What are the key hyperparameters mentioned?",
+    "query_mode": "methodology",
+    "expected_keywords": ["learning rate", "warmup"],
+    "notes": "Hyperparameter extraction"
+  },
+  {
+    "question": "Which paper uses masked language modeling?",
+    "query_mode": "general",
+    "expected_keywords": ["BERT", "masked language modeling"],
+    "notes": "Term-to-paper mapping"
+  },
+  {
+    "question": "List all datasets used for translation experiments.",
+    "query_mode": "datasets",
+    "expected_keywords": ["WMT"],
+    "notes": "Translation benchmark retrieval"
+  },
+  {
+    "question": "How does XGBoost improve training efficiency?",
+    "query_mode": "general",
+    "expected_keywords": ["sparsity-aware", "distributed"],
+    "notes": "Performance methods from systems paper"
+  },
+  {
+    "question": "Compare reproducibility details between BERT and Transformer.",
+    "query_mode": "compare",
+    "expected_keywords": ["datasets", "optimizer"],
+    "notes": "Comparison of implementation detail coverage"
+  },
+  {
+    "question": "Which evaluation metrics are reported in the provided papers?",
+    "query_mode": "reproduce",
+    "expected_keywords": ["BLEU", "GLUE", "SQuAD"],
+    "notes": "Metric extraction from evaluation content"
+  }
+]
