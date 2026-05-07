@@ -148,6 +148,8 @@ npm run dev
 
 Dashboard runs at `http://localhost:3002`
 
+**If the UI shows `Cannot find module './NNN.js'`:** stop the dev server (close the terminal running `next dev`), then from `web/` run `npm run clean` and start again. On Windows, stop the dev server before `npm install` if you see `EBUSY` on `@next/swc-*` files. Projects in OneDrive sync folders are more prone to stale `.next` chunks—`npm run clean` fixes that.
+
 ### 3) Streamlit Frontend (Optional)
 
 ```bash
