@@ -3,6 +3,11 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000";
+const DEMO_QUERY =
+  "List every dataset mentioned across my papers and summarize how each dataset was used by each paper.";
+const DEMO_MODE = "datasets";
+const DEMO_SECTION = "All Sections";
+const DEMO_TOP_K = 10;
 
 type Source = {
   doc_id: string;
@@ -30,6 +35,36 @@ type HealthPayload = {
   collection_stats: { paper_count: number; total_chunks: number; collection_name: string };
 };
 
+const PRESET_LIBRARY: PaperCard[] = [
+  {
+    doc_id: "preset_attention",
+    filename: "attention_is_all_you_need.txt",
+    title: "Attention Is All You Need",
+    authors: "Vaswani et al.",
+    year: "2017",
+    arxiv_id: "1706.03762",
+    chunk_count: 0
+  },
+  {
+    doc_id: "preset_xgboost",
+    filename: "xgboost_system.txt",
+    title: "XGBoost: A Scalable Tree Boosting System",
+    authors: "Chen and Guestrin",
+    year: "2016",
+    arxiv_id: "",
+    chunk_count: 0
+  },
+  {
+    doc_id: "preset_bert",
+    filename: "bert_pretraining.txt",
+    title: "BERT: Pre-training of Deep Bidirectional Transformers",
+    authors: "Devlin et al.",
+    year: "2018",
+    arxiv_id: "1810.04805",
+    chunk_count: 0
+  }
+];
+
 const modes = [
   { label: "General Q&A", value: "general" },
   { label: "Compare Methods", value: "compare" },
@@ -42,10 +77,10 @@ export default function HomePage() {
   const [health, setHealth] = useState<HealthPayload | null>(null);
   const [papers, setPapers] = useState<PaperCard[]>([]);
   const [loading, setLoading] = useState(false);
-  const [query, setQuery] = useState("");
-  const [mode, setMode] = useState("general");
-  const [section, setSection] = useState("All Sections");
-  const [topK, setTopK] = useState(6);
+  const [query, setQuery] = useState(DEMO_QUERY);
+  const [mode, setMode] = useState(DEMO_MODE);
+  const [section, setSection] = useState(DEMO_SECTION);
+  const [topK, setTopK] = useState(DEMO_TOP_K);
   const [answer, setAnswer] = useState("");
   const [sources, setSources] = useState<Source[]>([]);
   const [confidence, setConfidence] = useState(0);
@@ -60,6 +95,7 @@ export default function HomePage() {
     }),
     [papers]
   );
+  const displayPapers = papers.length > 0 ? papers : PRESET_LIBRARY;
 
   const fetchJson = async <T,>(path: string, options?: RequestInit): Promise<T> => {
     const response = await fetch(`${API_BASE_URL}${path}`, options);
@@ -97,8 +133,7 @@ export default function HomePage() {
     void refresh();
   }, []);
 
-  const askPapers = async (event: FormEvent) => {
-    event.preventDefault();
+  const runQuery = async () => {
     setLoading(true);
     setNotice("");
     try {
@@ -124,6 +159,19 @@ export default function HomePage() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const askPapers = async (event: FormEvent) => {
+    event.preventDefault();
+    await runQuery();
+  };
+
+  const loadDemoPreset = () => {
+    setQuery(DEMO_QUERY);
+    setMode(DEMO_MODE);
+    setSection(DEMO_SECTION);
+    setTopK(DEMO_TOP_K);
+    setNotice("Demo preset loaded. Click Run Query.");
   };
 
   const uploadFiles = async (files: FileList | null) => {
@@ -197,6 +245,18 @@ export default function HomePage() {
       <section className="content grid">
         <div className="card">
           <h2>Ask Across Papers</h2>
+          <div className="grid two" style={{ marginBottom: 12 }}>
+            <button type="button" onClick={loadDemoPreset} disabled={loading}>
+              Load Demo Preset
+            </button>
+            <button
+              type="button"
+              onClick={() => void runQuery()}
+              disabled={loading}
+            >
+              Run Demo Query
+            </button>
+          </div>
           <form className="grid two" onSubmit={askPapers}>
             <div style={{ gridColumn: "1 / span 2" }}>
               <label>Question</label>
@@ -204,7 +264,7 @@ export default function HomePage() {
                 rows={4}
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
-                placeholder="What datasets were used for tabular fraud detection?"
+                placeholder={DEMO_QUERY}
               />
             </div>
             <div>
@@ -279,27 +339,32 @@ export default function HomePage() {
         <div className="card">
           <h2>Paper Library</h2>
           {papers.length === 0 ? (
-            <p>Your library is empty. Upload a paper or fetch one from ArXiv.</p>
+            <p>
+              Live vector library is currently empty. Showing preset demo papers below. Start Ollama to index/query them.
+            </p>
           ) : (
-            <div className="grid">
-              {papers.map((paper) => (
-                <div className="card" key={paper.doc_id}>
-                  <strong>📄 {paper.title}</strong>
-                  <p>
-                    {paper.authors} — {paper.year} — Chunks: {paper.chunk_count}
-                  </p>
-                  {paper.arxiv_id && (
-                    <a href={`https://arxiv.org/abs/${paper.arxiv_id}`} target="_blank">
-                      arXiv:{paper.arxiv_id}
-                    </a>
-                  )}
+            <></>
+          )}
+          <div className="grid">
+            {displayPapers.map((paper) => (
+              <div className="card" key={paper.doc_id}>
+                <strong>📄 {paper.title}</strong>
+                <p>
+                  {paper.authors} — {paper.year} — Chunks: {paper.chunk_count}
+                </p>
+                {paper.arxiv_id && (
+                  <a href={`https://arxiv.org/abs/${paper.arxiv_id}`} target="_blank" rel="noreferrer">
+                    arXiv:{paper.arxiv_id}
+                  </a>
+                )}
+                {!paper.doc_id.startsWith("preset_") && (
                   <button style={{ marginTop: 10 }} onClick={() => void deletePaper(paper.doc_id)}>
                     Delete
                   </button>
-                </div>
-              ))}
-            </div>
-          )}
+                )}
+              </div>
+            ))}
+          </div>
         </div>
 
         {notice && <div className="card">{notice}</div>}

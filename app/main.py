@@ -30,6 +30,9 @@ rag_service: RAGService | None = None
 def seed_sample_docs() -> None:
     global document_service, embedding_service
     assert document_service is not None and embedding_service is not None
+    if ollama_client is None or not ollama_client.health_check().get("available", False):
+        logger.info("Skipping sample doc indexing because Ollama is unavailable.")
+        return
     sample_dir = Path("data/sample_docs")
     if not sample_dir.exists():
         return

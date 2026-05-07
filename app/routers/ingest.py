@@ -5,10 +5,12 @@ from uuid import uuid4
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
 
-from app.main import get_document_service, get_embedding_service
+from app.main import get_document_service, get_embedding_service, get_ollama_client
 from app.models.request_models import IngestResponse
 from app.services.document_service import DocumentService
 from app.services.embedding_service import ChromaEmbeddingService
+from app.utils.ollama_client import OllamaClient
+from app.utils.ollama_client import OllamaConnectionError
 
 router = APIRouter()
 
@@ -20,6 +22,7 @@ async def ingest_file(
     file: UploadFile = File(...),
     document_service: DocumentService = Depends(get_document_service),
     embedding_service: ChromaEmbeddingService = Depends(get_embedding_service),
+    ollama_client: OllamaClient = Depends(get_ollama_client),
 ) -> IngestResponse:
     filename = file.filename or "uploaded_file"
     extension = f".{filename.split('.')[-1].lower()}" if "." in filename else ""
@@ -34,11 +37,21 @@ async def ingest_file(
             status_code=status.HTTP_413_CONTENT_TOO_LARGE,
             detail=f"File too large. Max allowed: {settings.MAX_FILE_SIZE_MB}MB",
         )
+    if not ollama_client.health_check().get("available", False):
+        raise HTTPException(status_code=503, detail="Ollama is unavailable. Start Ollama first (`ollama serve`).")
 
     doc_id = str(uuid4())
     start = time.perf_counter()
-    documents, paper_metadata = document_service.process(file_bytes, filename, doc_id)
-    chunks_created = embedding_service.add_documents(documents, doc_id)
+    try:
+        documents, paper_metadata = document_service.process(file_bytes, filename, doc_id)
+        chunks_created = embedding_service.add_documents(documents, doc_id)
+    except OllamaConnectionError as exc:
+        raise HTTPException(
+            status_code=503,
+            detail=f"Ollama is unavailable. Start Ollama first (`ollama serve`). Details: {exc}",
+        ) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     elapsed_ms = (time.perf_counter() - start) * 1000
     return IngestResponse(
         doc_id=doc_id,
