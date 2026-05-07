@@ -1,0 +1,17 @@
+End-to-End Object Detection with Transformers
+Nicolas Carion et al.
+2020
+arXiv:2005.12872
+
+Abstract
+DETR reframes object detection as direct set prediction and removes hand-designed components such as non-maximum suppression.
+
+Methodology
+The approach uses a CNN backbone and transformer encoder-decoder with bipartite matching loss.
+Training is longer than classical detectors but the architecture is simpler end-to-end.
+
+Datasets
+Experiments are reported on the COCO benchmark.
+
+Results
+DETR achieves competitive detection quality with a cleaner design and strong extensibility.

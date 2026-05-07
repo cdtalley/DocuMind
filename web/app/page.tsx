@@ -2,7 +2,7 @@
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
 
-const API_BASE_URL = "http://localhost:8000";
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000";
 
 type Source = {
   doc_id: string;
@@ -51,6 +51,7 @@ export default function HomePage() {
   const [confidence, setConfidence] = useState(0);
   const [arxivId, setArxivId] = useState("");
   const [notice, setNotice] = useState("");
+  const [apiHealthy, setApiHealthy] = useState(true);
 
   const libraryStats = useMemo(
     () => ({
@@ -60,13 +61,36 @@ export default function HomePage() {
     [papers]
   );
 
+  const fetchJson = async <T,>(path: string, options?: RequestInit): Promise<T> => {
+    const response = await fetch(`${API_BASE_URL}${path}`, options);
+    if (!response.ok) {
+      let detail = `${response.status} ${response.statusText}`;
+      try {
+        const payload = (await response.json()) as { detail?: string };
+        if (payload?.detail) detail = payload.detail;
+      } catch {
+        // ignore json parse failures
+      }
+      throw new Error(detail);
+    }
+    return (await response.json()) as T;
+  };
+
   const refresh = async () => {
-    const [healthRes, papersRes] = await Promise.all([
-      fetch(`${API_BASE_URL}/health`),
-      fetch(`${API_BASE_URL}/api/v1/papers`)
-    ]);
-    if (healthRes.ok) setHealth(await healthRes.json());
-    if (papersRes.ok) setPapers(await papersRes.json());
+    try {
+      const [healthPayload, papersPayload] = await Promise.all([
+        fetchJson<HealthPayload>("/health"),
+        fetchJson<PaperCard[]>("/api/v1/papers")
+      ]);
+      setHealth(healthPayload);
+      setPapers(papersPayload);
+      setApiHealthy(true);
+    } catch {
+      setApiHealthy(false);
+      setHealth(null);
+      setPapers([]);
+      setNotice(`API unreachable at ${API_BASE_URL}. Start backend: uvicorn app.main:app --reload`);
+    }
   };
 
   useEffect(() => {
@@ -78,7 +102,11 @@ export default function HomePage() {
     setLoading(true);
     setNotice("");
     try {
-      const response = await fetch(`${API_BASE_URL}/api/v1/query`, {
+      const data = await fetchJson<{
+        answer: string;
+        sources: Source[];
+        confidence: number;
+      }>("/api/v1/query", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -88,8 +116,6 @@ export default function HomePage() {
           section_filter: section === "All Sections" ? null : section
         })
       });
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.detail || "Query failed");
       setAnswer(data.answer);
       setSources(data.sources || []);
       setConfidence(Number(data.confidence || 0));
@@ -108,11 +134,7 @@ export default function HomePage() {
       for (const file of Array.from(files)) {
         const form = new FormData();
         form.append("file", file);
-        const res = await fetch(`${API_BASE_URL}/api/v1/ingest`, { method: "POST", body: form });
-        if (!res.ok) {
-          const err = await res.json();
-          throw new Error(`${file.name}: ${err.detail || "upload failed"}`);
-        }
+        await fetchJson(`/api/v1/ingest`, { method: "POST", body: form });
       }
       setNotice("Upload complete.");
       await refresh();
@@ -128,13 +150,11 @@ export default function HomePage() {
     setLoading(true);
     setNotice("");
     try {
-      const response = await fetch(`${API_BASE_URL}/api/v1/fetch-arxiv`, {
+      const data = await fetchJson<{ title: string }>("/api/v1/fetch-arxiv", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ arxiv_id: arxivId.trim() })
       });
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.detail || "Fetch failed");
       setNotice(`Fetched: ${data.title}`);
       await refresh();
     } catch (error) {
@@ -145,8 +165,12 @@ export default function HomePage() {
   };
 
   const deletePaper = async (docId: string) => {
-    await fetch(`${API_BASE_URL}/api/v1/papers/${docId}`, { method: "DELETE" });
-    await refresh();
+    try {
+      await fetchJson(`/api/v1/papers/${docId}`, { method: "DELETE" });
+      await refresh();
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "Delete failed");
+    }
   };
 
   return (
@@ -157,7 +181,7 @@ export default function HomePage() {
         <div className="grid" style={{ marginTop: 16 }}>
           <div className="card">
             <strong>Ollama</strong>
-            <p>{health?.ollama_available ? "Online" : "Offline"}</p>
+            <p>{apiHealthy ? (health?.ollama_available ? "Online" : "Offline") : "API Down"}</p>
             <p>LLM: {health?.llm_model ?? "-"}</p>
             <p>Embed: {health?.embedding_model ?? "-"}</p>
           </div>

@@ -1,0 +1,17 @@
+Deep Residual Learning for Image Recognition
+Kaiming He, Xiangyu Zhang, Shaoqing Ren, Jian Sun
+2015
+arXiv:1512.03385
+
+Abstract
+Residual connections enable substantially deeper neural networks by improving optimization and gradient flow.
+
+Methodology
+The paper introduces residual blocks with identity shortcuts.
+Model families include 34, 50, 101, and 152-layer variants.
+
+Datasets
+Evaluation includes ImageNet and CIFAR-10 settings.
+
+Results
+Residual networks outperform prior architectures and become foundational in modern computer vision systems.

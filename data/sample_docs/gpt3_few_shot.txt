@@ -1,0 +1,17 @@
+Language Models are Few-Shot Learners
+Tom B. Brown et al.
+2020
+arXiv:2005.14165
+
+Abstract
+This paper investigates scaling autoregressive language models and shows strong few-shot and zero-shot capabilities.
+
+Methodology
+The model family scales transformer parameter counts and training data size.
+Evaluation is performed without gradient-based task-specific fine-tuning for many tasks.
+
+Datasets
+The study uses diverse NLP benchmark datasets and task prompts across translation, QA, and cloze tasks.
+
+Results
+Large models substantially improve few-shot performance but expose biases and evaluation robustness concerns.
