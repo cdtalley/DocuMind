@@ -15,6 +15,9 @@ class Settings(BaseSettings):
     RELEVANCE_THRESHOLD: float = 0.45
     MAX_FILE_SIZE_MB: int = 50
     ARXIV_BASE_URL: str = "https://export.arxiv.org/pdf"
+    ENABLE_FALLBACK_RETRIEVAL: bool = True
+    FALLBACK_TOP_N: int = 3
+    KEYWORD_RERANK_WEIGHT: float = 0.15
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
 

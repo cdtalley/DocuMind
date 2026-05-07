@@ -29,11 +29,27 @@ class DocumentService:
 
         authors = ""
         if title_idx >= 0:
-            for offset in (2, 3):
+            author_candidates: list[str] = []
+            for offset in (1, 2, 3):
                 candidate_idx = title_idx + offset
                 if candidate_idx < len(lines):
-                    authors = lines[candidate_idx]
+                    candidate = lines[candidate_idx]
+                    lower = candidate.lower()
+                    if (
+                        "arxiv" in lower
+                        or "abstract" in lower
+                        or re.search(r"\b20(?:0\d|1\d|2[0-6])\b", candidate)
+                    ):
+                        continue
+                    author_candidates.append(candidate)
+
+            # Prefer lines that look like names ("A, B, C", "A and B", etc.) over numeric/meta lines.
+            for candidate in author_candidates:
+                if re.search(r"\b(and|,)\b", candidate) or re.search(r"[A-Z][a-z]+\s+[A-Z][a-z]+", candidate):
+                    authors = candidate
                     break
+            if not authors and author_candidates:
+                authors = author_candidates[0]
 
         year_match = re.search(r"\b(20(?:0\d|1\d|2[0-6]))\b", first_pages_text)
         arxiv_match = re.search(r"arXiv[:\s]*(\d{4}\.\d{4,5})", first_pages_text, flags=re.IGNORECASE)

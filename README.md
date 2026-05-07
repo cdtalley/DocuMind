@@ -15,7 +15,7 @@ The entire stack runs locally with Ollama (`llama3` + `nomic-embed-text`), so th
 - **Production-oriented architecture**: async FastAPI backend, persistent ChromaDB, strict schema validation with Pydantic v2, modular service layer.
 - **Research-specific retrieval design**: chunk metadata includes section labels, page mapping, and source citations for explainability.
 - **Portfolio-ready UX**: polished Next.js dashboard for live demos, plus Streamlit app for quick experimentation.
-- **Practical interview value**: demonstrates applied RAG engineering, retrieval quality controls, and end-to-end product thinking.
+- **Operational robustness**: startup scripts, health checks, and graceful fallback behavior for reliable demos.
 
 ## Core Features
 
@@ -75,6 +75,49 @@ Included starter docs:
 
 ## Local Setup
 
+### One-Command Reliable Boot (Recommended)
+
+This is the default way I run demos so Ollama is always started first and the stack comes up in a stable order.
+
+```powershell
+.\start_documind.ps1
+```
+
+What this script does:
+- Starts Ollama automatically if not already running
+- Ensures required models exist (`llama3`, `nomic-embed-text`)
+- Boots FastAPI on `http://127.0.0.1:8001`
+- Boots Next.js on `http://localhost:3002`
+- Sets frontend API target automatically to the backend above
+
+Fast repeat boot:
+
+```powershell
+.\start_documind.ps1 -SkipModelPull
+```
+
+Stop everything:
+
+```powershell
+.\stop_documind.ps1
+```
+
+Pre-demo readiness check:
+
+```powershell
+.\demo_healthcheck.ps1
+```
+
+This validates frontend reachability, API health, Ollama availability, indexed paper count, and a real dataset-mode RAG query.
+
+End-to-end demo run:
+
+```powershell
+.\interview_demo.ps1
+```
+
+This runs a complete workflow: reliable boot, health verification, indexed library check, and a grounded RAG answer preview.
+
 ### Prerequisites
 
 - Python 3.11+
@@ -92,8 +135,8 @@ ollama pull nomic-embed-text
 uvicorn app.main:app --reload
 ```
 
-API runs at `http://localhost:8000`  
-Swagger docs: `http://localhost:8000/docs`
+API runs at `http://127.0.0.1:8001`  
+Swagger docs: `http://127.0.0.1:8001/docs`
 
 ### 2) Next.js Showcase Frontend
 
@@ -103,7 +146,7 @@ npm install
 npm run dev
 ```
 
-Dashboard runs at `http://localhost:3000`
+Dashboard runs at `http://localhost:3002`
 
 ### 3) Streamlit Frontend (Optional)
 
@@ -145,13 +188,11 @@ Current test suite validates ingest, query behavior, invalid arXiv handling, col
 docker-compose up --build
 ```
 
-## Portfolio Positioning (How I’d Present This)
+## Project Highlights
 
-DocuMind showcases my ability to design and ship an end-to-end AI product, not just isolated notebooks:
-- API engineering + schema discipline
-- retrieval system design for real research workflows
-- local-first LLM ops (cost/privacy conscious)
-- frontend productization for stakeholder demos
-- testability and deployment readiness
-
-This is exactly the kind of practical AI engineering I deliver for clients who need production outcomes fast.
+DocuMind is an end-to-end AI engineering project that combines:
+- API engineering with typed contracts and modular service boundaries
+- retrieval system design for research-focused workflows
+- local-first LLM operations for privacy and cost control
+- frontend productization for interactive stakeholder demos
+- testing and deployment readiness for production evolution
