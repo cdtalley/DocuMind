@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>DocuMind — Upwork Portfolio &amp; Project Catalog</title>
+  <style>
+    :root { --ink: #0f172a; --muted: #475569; --accent: #2563eb; --bg: #f8fafc; }
+    * { box-sizing: border-box; }
+    body { font-family: "Segoe UI", system-ui, sans-serif; margin: 0; color: var(--ink); background: var(--bg); line-height: 1.55; font-size: 11pt; }
+    main { max-width: 720px; margin: 0 auto; padding: 28px 20px 48px; }
+    h1 { font-size: 1.75rem; margin: 0 0 6px; color: var(--accent); letter-spacing: -0.02em; }
+    .tag { color: var(--muted); font-size: 0.95rem; margin-bottom: 22px; }
+    h2 { font-size: 1.1rem; margin: 26px 0 10px; border-bottom: 2px solid #e2e8f0; padding-bottom: 4px; }
+    p, li { color: #334155; }
+    ul { padding-left: 1.2rem; }
+    table { width: 100%; border-collapse: collapse; margin: 12px 0; font-size: 0.95rem; }
+    th, td { border: 1px solid #cbd5e1; padding: 8px 10px; text-align: left; vertical-align: top; }
+    th { background: #e2e8f0; }
+    .note { background: #eff6ff; border: 1px solid #bfdbfe; padding: 12px 14px; border-radius: 8px; margin: 16px 0; font-size: 0.92rem; }
+    code { background: #e2e8f0; padding: 2px 6px; border-radius: 4px; font-size: 0.88em; }
+    @media print {
+      body { background: #fff; }
+      .note { break-inside: avoid; }
+      h2 { break-after: avoid; }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>DocuMind</h1>
+    <p class="tag">Local-first RAG for research libraries — <strong>portfolio brief</strong> for Upwork Project Catalog &amp; portfolio items</p>
+
+    <div class="note">
+      <strong>Save as PDF:</strong> In Chrome or Edge, press <kbd>Ctrl</kbd>+<kbd>P</kbd> → Destination: <em>Save as PDF</em> → Save.
+      Or run <code>pip install -r scripts/portfolio_requirements.txt</code> then <code>python scripts/generate_portfolio_pdf.py</code> for <code>portfolio/DocuMind_Upwork_Catalog.pdf</code>.
+    </div>
+
+    <h2>One-line pitch</h2>
+    <p>End-to-end <strong>retrieval-augmented Q&amp;A</strong>: ingest PDFs, Word, and text plus arXiv fetch; chunk with section-aware metadata; embed in <strong>ChromaDB</strong>; retrieve with rerank + cross-paper diversity; generate answers with <strong>mode-specific prompts</strong> and <strong>citations</strong> — <strong>FastAPI</strong> API + <strong>Next.js</strong> dashboard + <strong>Ollama</strong> (demo without cloud LLM keys).</p>
+
+    <h2>What buyers get</h2>
+    <ul>
+      <li>Grounded answers with expandable <strong>source cards</strong> (title, section, chunk, distance).</li>
+      <li>Modes: general Q&amp;A, compare, methodology, dataset map, reproducibility checklist.</li>
+      <li><strong>Operations:</strong> <code>/health/live</code> (liveness), <code>/health/ready</code> (readiness for traffic), <code>X-Request-ID</code> on responses, optional <code>API_KEY</code> on <code>/api/v1</code>, CORS allowlist, gzip, baseline security headers, optional JSON logs.</li>
+      <li>Production-minded API behavior: honest deletes (404), arXiv error mapping (404 vs 502 vs 504), validated query filters.</li>
+    </ul>
+
+    <h2>Tech keywords (search visibility)</h2>
+    <p>Python, FastAPI, Pydantic v2, Uvicorn, ChromaDB, LangChain text splitters, Ollama, httpx, Next.js 15, React 18, TypeScript, Docker, pytest.</p>
+
+    <h2>Suggested Upwork project titles</h2>
+    <ul>
+      <li><em>Fixed price:</em> “MVP: RAG over your PDFs — FastAPI + vector DB + grounded UI”</li>
+      <li><em>Hourly:</em> “Senior ML — RAG architecture, eval, and deployment on your stack”</li>
+      <li><em>Migration:</em> “Replace demo Ollama with OpenAI / Azure OpenAI — same retrieval layer”</li>
+    </ul>
+
+    <h2>Pricing table (edit brackets for your profile)</h2>
+    <table>
+      <thead>
+        <tr><th>Offering</th><th>Typical scope</th><th>Anchor (USD)</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>Hourly</td><td>Ongoing integration, reviews, debugging</td><td>[ $95–$150 / hr ]</td></tr>
+        <tr><td>Fixed — Discovery</td><td>Architecture doc, backlog, risks, 1–2 weeks</td><td>[ $2,500–$6,000 ]</td></tr>
+        <tr><td>Fixed — MVP RAG</td><td>Ingest, index, UI, one-cloud deploy, smoke tests</td><td>[ $6,000–$14,000 ]</td></tr>
+        <tr><td>Fixed — Hardening</td><td>Auth, rate limits, tenant ACLs, formal eval — priced after discovery</td><td>[ TBD ]</td></tr>
+      </tbody>
+    </table>
+    <p class="tag">Anchors vary by geography, reviews, and scope. Use milestones with written acceptance criteria.</p>
+
+    <h2>5-minute demo script</h2>
+    <ol>
+      <li>Boot stack (README: <code>start_documind.ps1</code> or Docker).</li>
+      <li>Open dashboard → run <strong>Flagship</strong> scenario → show synthesis + sources.</li>
+      <li>Open <code>/docs</code> and <code>/health/ready</code> — explain readiness vs liveness for orchestrators.</li>
+      <li>Mention optional <code>API_KEY</code> and CORS for staging/production.</li>
+    </ol>
+
+    <h2>Your links (fill in)</h2>
+    <ul>
+      <li>Repository: <em>[ GitHub URL ]</em></li>
+      <li>Live demo: <em>[ URL or “on request” ]</em></li>
+      <li>Profile: <em>[ Upwork profile URL ]</em></li>
+    </ul>
+  </main>
+</body>
+</html>

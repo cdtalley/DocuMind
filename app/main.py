@@ -10,9 +10,11 @@ from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, Response
+from starlette.middleware.gzip import GZipMiddleware
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from app.config import get_settings
+from app.logging_config import configure_logging
 from app.models.response_models import CollectionStats, HealthResponse, LivenessResponse, ReadinessResponse
 from app.services.document_service import DocumentService
 from app.services.embedding_service import ChromaEmbeddingService
@@ -20,12 +22,9 @@ from app.services.rag_service import RAGService
 from app.utils.chunker import DocumentChunker
 from app.utils.ollama_client import OllamaClient
 
-logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s — %(name)s — %(levelname)s — %(message)s"
-)
-logger = logging.getLogger("documind")
-
 settings = get_settings()
+configure_logging(use_json=settings.LOG_JSON, level_name=settings.LOG_LEVEL)
+logger = logging.getLogger("documind")
 ollama_client: OllamaClient | None = None
 embedding_service: ChromaEmbeddingService | None = None
 document_service: DocumentService | None = None
@@ -76,7 +75,6 @@ def seed_sample_docs() -> None:
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     global ollama_client, embedding_service, document_service, rag_service
-    logging.getLogger().setLevel(getattr(logging, settings.LOG_LEVEL.upper(), logging.INFO))
     chunker = DocumentChunker(chunk_size=settings.CHUNK_SIZE, chunk_overlap=settings.CHUNK_OVERLAP)
     ollama_client = OllamaClient(
         base_url=settings.OLLAMA_BASE_URL,
@@ -126,6 +124,9 @@ _th = settings.trusted_host_list()
 if _th:
     app.add_middleware(TrustedHostMiddleware, allowed_hosts=_th)
 
+if settings.ENABLE_RESPONSE_GZIP:
+    app.add_middleware(GZipMiddleware, minimum_size=500)
+
 
 @app.exception_handler(Exception)
 async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONResponse:
@@ -148,10 +149,29 @@ async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONR
 async def request_metrics_middleware(request: Request, call_next):
     request_id = str(uuid.uuid4())[:8]
     request.state.request_id = request_id
+
+    if (
+        settings.API_KEY
+        and request.method != "OPTIONS"
+        and request.url.path.startswith("/api/v1")
+    ):
+        supplied = request.headers.get("x-api-key") or request.headers.get("X-API-Key")
+        if supplied != settings.API_KEY:
+            return JSONResponse(
+                status_code=401,
+                content={"detail": "Invalid or missing X-API-Key header."},
+                headers={"X-Request-ID": request_id},
+            )
+
     start = time.perf_counter()
     response: Response = await call_next(request)
     duration_ms = (time.perf_counter() - start) * 1000
     response.headers["X-Request-ID"] = request_id
+    response.headers.setdefault("X-Content-Type-Options", "nosniff")
+    response.headers.setdefault("X-Frame-Options", "DENY")
+    response.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
+    if settings.APP_ENV == "production":
+        response.headers.setdefault("Permissions-Policy", "camera=(), microphone=(), geolocation=()")
     logger.info(
         "request_id=%s method=%s path=%s status=%s duration_ms=%.2f",
         request_id,

@@ -5,13 +5,14 @@ param(
 $ErrorActionPreference = "SilentlyContinue"
 
 foreach ($port in $Ports) {
-    $connections = Get-NetTCPConnection -LocalPort $port -State Listen
+    $connections = Get-NetTCPConnection -LocalPort $port -State Listen -ErrorAction SilentlyContinue
     foreach ($conn in $connections) {
-        $pid = $conn.OwningProcess
-        if ($pid -and $pid -ne 0) {
+        # Do not use $PID — it is a built-in automatic variable in PowerShell.
+        $owningPid = $conn.OwningProcess
+        if ($owningPid -and $owningPid -ne 0) {
             try {
-                Stop-Process -Id $pid -Force
-                Write-Host "[stopped] PID $pid on port $port"
+                Stop-Process -Id $owningPid -Force
+                Write-Host "[stopped] PID $owningPid on port $port"
             } catch {
             }
         }

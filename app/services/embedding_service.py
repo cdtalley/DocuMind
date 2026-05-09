@@ -1,7 +1,11 @@
 from __future__ import annotations
 
+import os
 from collections import defaultdict
 from typing import Any
+
+# Default Chroma anonymized telemetry off unless explicitly enabled in the environment.
+os.environ.setdefault("ANONYMIZED_TELEMETRY", "False")
 
 import chromadb
 from langchain.schema import Document

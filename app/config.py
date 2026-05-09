@@ -34,6 +34,12 @@ class Settings(BaseSettings):
     TRUSTED_HOSTS: str = ""
     # When True, OpenAPI /docs and /redoc are disabled (recommended behind ingress in production).
     DISABLE_OPENAPI: bool = False
+    # When set, all /api/v1/* routes require header X-API-Key matching this value (except OPTIONS for CORS).
+    API_KEY: str = ""
+    # One line per log entry as JSON (easier for log platforms). When False, use human-readable format.
+    LOG_JSON: bool = False
+    # Send gzip-compressed responses when client accepts encoding (reduces bandwidth for large JSON).
+    ENABLE_RESPONSE_GZIP: bool = True
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
 

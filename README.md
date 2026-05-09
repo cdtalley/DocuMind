@@ -1,131 +1,114 @@
 # DocuMind
 
-**Local-first RAG over your research paper library** — upload PDFs, DOCX, or TXT, pull papers from arXiv, and query across everything with modes built for how data scientists and ML engineers actually work: methodology dives, dataset inventory, cross-paper comparison, and reproducibility checklists. **No OpenAI, no Anthropic:** inference and embeddings run on **Ollama** (`llama3`, `nomic-embed-text`) on your machine.
+DocuMind is a local-first RAG app over a research paper library. You ingest PDFs, Word files, or plain text, optionally pull PDFs from arXiv by ID, then query the whole library with modes that match how I actually work: quick Q&A, side-by-side method comparison, methodology extraction, a dataset pass, and a “what would it take to reproduce this?” style checklist.
 
-I built DocuMind to demonstrate that I can ship an **end-to-end applied AI product** — not a notebook — with a real API surface, persistent retrieval, honest citations, and a UI people can click through.
+Inference and embeddings run on **Ollama** (`llama3`, `nomic-embed-text`) on your machine. No OpenAI or Anthropic keys required for the default setup, which keeps demos cheap and keeps everything on disk you control.
 
----
-
-## What I bring (and what this repo shows)
-
-- **Product sense:** The API is organized around workflows researchers care about (modes, section filters, library management) rather than a single generic chat box.
-- **Backend discipline:** FastAPI with **Pydantic v2** schemas everywhere, **pydantic-settings** for config, clear separation between ingestion, embedding, retrieval, and generation.
-- **RAG engineering:** Chunking with **LangChain** splitters, section-aware metadata, vector search in **ChromaDB** (cosine, persistent store), reranking and diversity logic so answers are not dominated by one noisy chunk or one paper when you have a library.
-- **Local LLM operations:** Ollama-only stack — good for **privacy**, **cost**, and **repeatable demos** without API keys.
-- **Reliability:** PowerShell bootstrap and health scripts, graceful behavior when Ollama is down, request logging with **X-Request-ID** for tracing.
-- **Frontend delivery:** **Next.js 15** dashboard (primary) plus **Streamlit** for fast iteration — both talk to the same API.
-- **Quality bar:** **pytest** coverage for ingest, query paths, arXiv validation, and evaluation fixtures.
+I built this because I wanted something I could hand to someone and they could click through—not a notebook buried in a repo. There is a real FastAPI surface, a persistent vector index, source cards on answers, and a Next.js dashboard. Streamlit is there if I want to iterate faster on the same API.
 
 ---
 
-## The problem I’m solving
+## Why I bothered
 
-Research libraries grow fast: PDFs from arXiv, notes, half-read papers. Answering “which paper used which dataset?”, “how do these two methods differ?”, or “what would I need to reproduce this?” usually means re-skimming files or trusting memory. DocuMind is a **searchable, cited layer** on top of that library — still grounded in your documents, with explicit source cards.
-
----
-
-## Architecture (how it fits together)
-
-| Layer | What I implemented |
-|--------|---------------------|
-| **Ingestion** | File type + size validation; **PyPDF2** / **python-docx** / plain text; heuristic metadata (title, authors, year, arXiv id); LangChain **RecursiveCharacterTextSplitter** with section hints. |
-| **Indexing** | **ChromaDB** persistent collection; **nomic-embed-text** via Ollama; metadata-rich chunks (doc id, page, section, chunk index). |
-| **Retrieval** | Top-k semantic search, optional **section filter**, distance threshold plus **keyword overlap rerank** and **source deduplication / cross-paper diversity** so UI answers aren’t repetitive garbage. |
-| **Generation** | Mode-specific system prompts; **llama3** via Ollama chat API; structured responses with **citations** and **confidence**; **datasets** mode uses structured extraction from retrieved text for cleaner, more reliable lists. |
-| **API** | REST under `/api/v1`, OpenAPI at `/docs`, lifespan-managed singletons, `GET /health` for ops. |
-| **UI** | Next.js app (`web/`) — dashboard, library, ingest/fetch flows; Streamlit (`frontend/app.py`) optional. |
+My reading pile is always half PDFs and half “I’ll come back to this.” When I need to remember which paper used which benchmark, or how two approaches differ, I’m usually re-skimming or trusting memory. DocuMind is the layer I wanted on top of that: search grounded in what I actually indexed, with citations so I can sanity-check the model.
 
 ---
 
-## Feature set
+## How it’s put together
 
-- Ingest **`.pdf`**, **`.docx`**, **`.txt`**
-- **Fetch from arXiv** by ID (PDF download + ingest)
-- **Five query modes:** `general`, `compare`, `methodology`, `datasets`, `reproduce`
-- **Section filter** (optional) for focused retrieval
-- **Paper library:** list, detail, delete
-- **Collection stats** (chunks, paper count)
-- **Large starter corpus** in `data/sample_docs/` (**40+** text briefs: core ML, vision, NLP, graphs, time series, alignment, plus **institutional-style** summaries spanning risk, markets, compliance-adjacent ML, and ops — useful for stress-testing retrieval breadth). Bundled papers use stable ids `sample_*`. When `SAMPLE_CORPUS_VERSION` in settings changes, those rows are purged and re-indexed on API startup (requires Ollama).
-- **Batch backfill:** `scripts/bulk_ingest_arxiv.py` + `data/arxiv_seed_list.txt` to grow the library toward **hundreds of papers** (respect arXiv rate limits; run against a live API with Ollama).
-
----
-
-## Production operations & scale
-
-Patterns here match what serious teams ship behind a real RAG product: **observability hooks**, **dependency-aware readiness**, **tight CORS**, optional **host allowlists**, and **container packaging**.
-
-| Concern | What to use |
-|--------|-------------|
-| **Liveness** | `GET /health/live` — process up (orchestrator keep-alive). |
-| **Readiness** | `GET /health/ready` — **200** when Ollama + Chroma are usable; **503** otherwise (Kubernetes / load balancer drain). |
-| **Full status** | `GET /health` — models, collection stats, degraded vs ok. |
-| **Tracing** | Every response includes **`X-Request-ID`**; logs include `request_id`. |
-| **Hardening** | `.env`: `APP_ENV`, `LOG_LEVEL`, `TRUSTED_HOSTS`, `DISABLE_OPENAPI`, `CORS_ORIGINS` / `CORS_ALLOW_ALL`. |
-| **Docker** | `docker compose up --build` — API on **8001**, persistent Chroma volume; set `OLLAMA_BASE_URL` to reach Ollama (defaults to `host.docker.internal` on Docker Desktop). |
-| **Corpus growth** | Add `.txt` under `data/sample_docs/` and bump `SAMPLE_CORPUS_VERSION`, or bulk-ingest arXiv IDs. |
-
-**Interview narrative:** In conversations about “production RAG,” anchor on **concrete** decisions: retrieval depth, chunking, evaluation, failure behavior when the LLM or index is down, auditability of citations, and how you refreshed the index. This repository is a **technical reference implementation** you can walk through line-by-line — it does not substitute for articulating *your* ownership and metrics at past employers.
+| Piece | What I used |
+|-------|-------------|
+| Ingest | Type and size checks; PyPDF2 / python-docx / raw text; rough metadata (title, authors, year, arXiv id when the text cooperates). |
+| Chunking | LangChain `RecursiveCharacterTextSplitter` plus a light section label on each chunk from the first lines of text. |
+| Index | ChromaDB, persistent on disk, cosine distance; `nomic-embed-text` through Ollama for vectors. |
+| Retrieval | Top‑k search, optional section filter, a distance cutoff, keyword overlap rerank, and logic so one paper doesn’t eat the whole context window. |
+| Answers | Mode-specific prompts to `llama3`; response includes sources and a simple confidence figure. Datasets mode pulls structured hints from retrieved text so lists aren’t entirely free‑form generation. |
+| API | REST under `/api/v1`, OpenAPI at `/docs`, singletons over FastAPI lifespan. |
+| UI | `web/` Next.js app is what I use day to day; `frontend/app.py` Streamlit hits the same endpoints. |
 
 ---
 
-## Tech stack
+## What you can do with it
 
-| Area | Choices |
-|------|---------|
-| API | **FastAPI**, **Uvicorn**, async where it matters |
-| Data | **Pydantic v2**, **pydantic-settings** |
-| Vectors | **ChromaDB** (persistent), cosine space |
-| Chunking | **LangChain** text splitters |
-| Models | **Ollama** — `llama3`, `nomic-embed-text` |
-| HTTP client | **httpx** (arXiv), **requests** (Ollama sync calls in embedding path) |
-| Web | **Next.js 15**, **React 18**, **TypeScript** |
-| Alt UI | **Streamlit** |
-| Tests | **pytest**, **pytest-asyncio** |
-| Ops | **Docker** / **docker-compose**; PowerShell **start / stop / health / demo** scripts |
+Ingest `.pdf`, `.docx`, `.txt`. Fetch from arXiv by ID. Query in five modes: `general`, `compare`, `methodology`, `datasets`, `reproduce`. Optional section filter. List papers, fetch one, delete. Collection stats endpoint.
+
+Bundled text “papers” live under `data/sample_docs/`—40‑ish summaries spanning core ML topics plus a bunch of finance‑ and ops‑flavored briefs I added so retrieval isn’t trivial on a two‑document toy set. They index as `sample_*` doc ids. If you change `SAMPLE_CORPUS_VERSION` in settings, startup purges those sample rows and re‑ingests (Ollama has to be up).
+
+To grow the library for real: `scripts/bulk_ingest_arxiv.py` with `data/arxiv_seed_list.txt` (I throttle between requests so I’m not hammering arXiv).
 
 ---
 
-## Run it (Windows — recommended)
+## Ops and “production-shaped” bits
 
-I standardize on **fixed ports** so the UI and API never argue: API **8001**, dashboard **3002**.
+I’m not claiming this is a bank deployment. I am claiming the boring parts are thought through enough that I wouldn’t be embarrassed wiring it behind a reverse proxy for a serious demo.
 
-**First time (pulls models if needed):**
+- `GET /health/live` — process is up.
+- `GET /health/ready` — returns 200 when Ollama and Chroma are usable, 503 otherwise (same idea as Kubernetes readiness).
+- `GET /health` — models, collection counts, degraded vs ok.
+- Every response gets an `X-Request-ID`; logs include it.
+- `.env` covers CORS allowlist (or open CORS for local only), optional trusted Host headers, optional `API_KEY` on `/api/v1` (send `X-API-Key`; leave blank for the Next.js dev UI), gzip on responses, JSON log lines if you want them, turning OpenAPI off in locked‑down environments. Chroma’s anonymized telemetry defaults off unless you opt in.
+- Docker: `docker compose up --build`, API on 8001, Chroma in a named volume. Ollama is assumed on the host (`host.docker.internal` on Docker Desktop). On Windows I still reach for the PowerShell scripts first.
+
+If I’m talking about production RAG in an interview, I point to specifics: how I chunk, how I handle bad retrieval scores, what happens when the model host is down, how citations are surfaced, how I’d reindex on a schedule. This repo is something I can walk file by file. It doesn’t replace talking about scope and outcomes from paid work.
+
+---
+
+## Upwork / portfolio
+
+I keep a one‑pager for proposals:
+
+- `portfolio/DocuMind_Upwork_Catalog.html` — open in a browser, print to PDF if I want to tweak layout.
+- `portfolio/DocuMind_Upwork_Catalog.pdf` — regenerate with `pip install -r scripts/portfolio_requirements.txt` then `python scripts/generate_portfolio_pdf.py`.
+
+---
+
+## Stack (quick)
+
+Python 3.11+, FastAPI, Pydantic v2, pydantic-settings, Uvicorn, ChromaDB, LangChain text splitters, Ollama, httpx, requests (Ollama calls from the embedding path), Next.js 15, React 18, TypeScript, pytest. Optional Streamlit.
+
+---
+
+## How I run it on Windows
+
+I fixed ports so nothing fights: API **8001**, dashboard **3002**.
+
+First boot (pulls models if they’re missing):
 
 ```powershell
 .\start_documind.ps1
 ```
 
-**Day-to-day (models already present):**
+After that, when models already exist:
 
 ```powershell
 .\start_documind.ps1 -SkipModelPull
 ```
 
-**Stop:**
+Stop listeners on 3002 / 8001 / 11434:
 
 ```powershell
 .\stop_documind.ps1
 ```
 
-**Sanity check (health + sample query):**
+Health + sample query:
 
 ```powershell
 .\demo_healthcheck.ps1
 ```
 
-**Full stack smoke (boot + health + library + query preview):**
+Heavier smoke:
 
 ```powershell
 .\interview_demo.ps1
 ```
 
-**Prerequisites:** Python 3.11+, Node 18+, [Ollama](https://ollama.com), ~8GB+ RAM comfortable for `llama3`.
+You’ll want Python 3.11+, Node 18+, Ollama installed, and enough RAM that `llama3` isn’t miserable (I treat ~8GB as a soft floor).
 
 ---
 
-## Manual setup (cross-platform)
+## Manual setup without the scripts
 
-**Backend**
+Backend:
 
 ```bash
 pip install -r requirements.txt
@@ -135,10 +118,9 @@ ollama pull nomic-embed-text
 uvicorn app.main:app --host 127.0.0.1 --port 8001 --reload
 ```
 
-- API: `http://127.0.0.1:8001`  
-- Docs: `http://127.0.0.1:8001/docs`
+API: `http://127.0.0.1:8001` — docs at `/docs`.
 
-**Next.js**
+Frontend:
 
 ```bash
 cd web
@@ -146,72 +128,74 @@ npm install
 npm run dev -- -p 3002
 ```
 
-Set `NEXT_PUBLIC_API_BASE_URL=http://127.0.0.1:8001` if the UI and API run on different hosts.
+If the UI isn’t on the same machine, set `NEXT_PUBLIC_API_BASE_URL=http://127.0.0.1:8001` (or whatever host the API listens on).
 
-**Streamlit (optional)**
+Streamlit (optional):
 
 ```bash
 streamlit run frontend/app.py
 ```
 
-**Next.js dev error `Cannot find module './NNN.js'`:** stop `next dev`, then from `web/` run `npm run clean` and restart. On Windows, stop the dev server before `npm install` if `@next/swc*` reports `EBUSY`. OneDrive-synced projects can stale `.next` — `npm run clean` fixes it.
+If Next throws `Cannot find module './NNN.js'`, I kill dev, run `npm run clean` from `web/`, and start again. On Windows, if `npm install` complains about `EBUSY` on `@next/swc*`, the dev server is still holding the file—stop it first. OneDrive can leave `.next` in a weird state; `npm run clean` usually fixes it.
 
 ---
 
-## API (summary)
+## API routes I actually use
 
-| Method | Path | Purpose |
-|--------|------|---------|
-| GET | `/health` | Ollama + collection stats |
-| POST | `/api/v1/ingest` | Upload paper |
-| DELETE | `/api/v1/ingest/{doc_id}` | Remove by ingest id |
-| POST | `/api/v1/fetch-arxiv` | Fetch PDF by arXiv id |
-| POST | `/api/v1/query` | RAG query (mode + optional section) |
-| GET | `/api/v1/papers` | Library list |
-| GET | `/api/v1/papers/{doc_id}` | One paper |
-| DELETE | `/api/v1/papers/{doc_id}` | Delete paper |
-| GET | `/api/v1/collection/stats` | Chunk / paper counts |
-
----
-
-## Query modes (intent)
-
-- **`general`** — Q&A with citations  
-- **`compare`** — Cross-paper comparison framing  
-- **`methodology`** — architectures, training, hyperparameters  
-- **`datasets`** — datasets and how they’re used (structured extraction from retrieved context)  
-- **`reproduce`** — reproducibility checklist style answers  
+| Method | Path | Notes |
+|--------|------|--------|
+| GET | `/health` | Full status |
+| GET | `/health/live` | Liveness |
+| GET | `/health/ready` | Readiness |
+| POST | `/api/v1/ingest` | Multipart upload |
+| DELETE | `/api/v1/ingest/{doc_id}` | 404 if nothing was indexed for that id |
+| POST | `/api/v1/fetch-arxiv` | Body: `{ "arxiv_id": "..." }` |
+| POST | `/api/v1/query` | Body: `query`, `top_k`, `query_mode`, optional `section_filter` |
+| GET | `/api/v1/papers` | Library |
+| GET | `/api/v1/papers/{doc_id}` | One row |
+| DELETE | `/api/v1/papers/{doc_id}` | Same 404 behavior as ingest delete |
+| GET | `/api/v1/collection/stats` | Counts |
 
 ---
 
-## Testing & evaluation
+## Query modes
+
+`general` — straight Q&A with citations.  
+`compare` — framed for comparing lines of work across papers.  
+`methodology` — training, architecture, hyperparameters where the text supports it.  
+`datasets` — dataset names and usage, with structured extraction from hits.  
+`reproduce` — checklist-style “what you’d need to rerun this” grounded in context.
+
+---
+
+## Tests
 
 ```bash
 pytest -q
 ```
 
-`evaluation/test_cases.json` holds scenario prompts + keywords for regression-style checks; `evaluation/test_rag_pipeline.py` guards fixture shape.
+`evaluation/test_cases.json` plus `evaluation/test_rag_pipeline.py` are there so I don’t accidentally break the shape of the eval fixtures.
 
 ---
 
 ## Docker
 
 ```bash
-docker-compose up --build
+docker compose up --build
 ```
 
-*(Host networking and Ollama are environment-specific — for a fully local demo, the PowerShell scripts are the most predictable on Windows.)*
+For a laptop-only loop on Windows, the PowerShell scripts are still what I trust most; Docker is for “same API in a container” demos and CI-ish runs.
 
 ---
 
-## Configuration
+## Config
 
-See `.env.example`: Ollama URL, models, Chroma paths, chunk sizes, `TOP_K_RESULTS`, `RELEVANCE_THRESHOLD`, retrieval tuning (`ENABLE_FALLBACK_RETRIEVAL`, `FALLBACK_TOP_N`, `KEYWORD_RERANK_WEIGHT`), and upload limits.
+Everything important is in `.env.example`: Ollama URL, model names, Chroma paths, chunk size and overlap, relevance threshold, retrieval fallback knobs, upload cap, CORS, optional API key, logging shape, gzip toggle, corpus version for the bundled samples.
 
 ---
 
-## License / use
+## License / intent
 
-This repo is intended as a **portfolio-grade reference implementation**. Extend auth, multi-tenant namespaces, stronger PDF layout parsing, and formal RAG eval (precision/recall @k) as the next production steps — the current codebase is deliberately understandable and demo-safe.
+I’m shipping this as a portfolio reference: readable, demo-safe, something I can extend with real auth, tenant isolation, and heavier PDF layout handling when a client actually needs it.
 
-I’m comfortable owning the full path from **problem framing → API design → retrieval tuning → UI → ops scripts**, which is what I want this project to communicate at a glance.
+If you’re reading this because you’re hiring or contracting: I care about owning the path from problem to API to retrieval behavior to UI to how it runs in prod. That’s what DocuMind is here to show.
