@@ -1,0 +1,19 @@
+Training Language Models to Follow Instructions with Human Feedback
+Long Ouyang et al.
+2022
+arXiv:2203.02155
+
+Abstract
+InstructGPT aligns large language models to human intent using supervised fine-tuning on demonstrations followed by reinforcement learning from human feedback (RLHF), reducing harmful or unhelpful outputs relative to base models.
+
+Methodology
+The pipeline stages are: (1) collect human-written demonstrations of desired behavior on prompts, (2) fine-tune the base LM supervisedly, (3) train a reward model from human rankings of model outputs, (4) optimize policy with PPO against the reward model with a KL penalty toward the supervised policy.
+
+Datasets
+Demonstrations and comparison labels are collected from held-out human labelers across diverse prompts intended to reflect real user requests. Helpfulness and honesty criteria are emphasized during ranking.
+
+Experiments
+Human side-by-side evaluation measures preference for InstructGPT outputs versus baselines. Automatic metrics include toxicity scores and truthfulness probes on selected benchmarks.
+
+Results
+Smaller Instruct-tuned models can be preferred over larger base models on human evaluations, illustrating alignment gains beyond raw scale.

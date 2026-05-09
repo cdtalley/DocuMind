@@ -1,0 +1,15 @@
+Neural Stochastic Differential Equations for Yield Curve Simulation and Scenario Generation
+Rates Research Summary
+2022
+
+Abstract
+We parameterize drift and diffusion of forward rates with neural SDEs calibrated to historical term structure dynamics and caps/floors implied vols.
+
+Methodology
+Training minimizes Wasserstein distance between simulated and historical increments; Euler-Maruyama discretization supports GPU batch simulation for PFE-style metrics.
+
+Datasets
+USD and EUR OIS curves 2010–2022; validation compares to Hull-White and affine benchmark models.
+
+Results
+Neural SDEs capture volatility smile migration better in stress windows but require careful regularization to avoid arbitrage in long horizons.

@@ -1,0 +1,19 @@
+An Image is Worth 16x16 Words: Transformers for Image Recognition at Scale
+Alexey Dosovitskiy, Lucas Beyer, Alexander Kolesnikov, Dirk Weissenborn, Xiaohua Zhai, Thomas Unterthiner, Mostafa Dehghani, Matthias Minderer, Georg Heigold, Sylvain Gelly, Jakob Uszkoreit, Neil Houlsby
+2020
+arXiv:2010.11929
+
+Abstract
+Vision Transformer (ViT) applies a pure Transformer encoder to sequences of image patches, matching or exceeding CNNs on large-scale supervised pretraining while simplifying inductive biases.
+
+Methodology
+Images are split into fixed-size patches linearly embedded with position embeddings. Class token aggregation follows BERT-style pooling. Training uses heavy data augmentation and AdamW with cosine learning rate schedules.
+
+Datasets
+Pretraining is performed on ImageNet-21k or JFT-300M in large-scale variants. Fine-tuning and evaluation report top-1 accuracy on ImageNet-1k and transfer to CIFAR-10, CIFAR-100, Oxford-IIIT Pets, and VTAB suites.
+
+Experiments
+The paper studies patch size, model depth, pretraining dataset size, and compute budgets, showing ViT benefits disproportionately from scale versus inductive priors in CNNs.
+
+Results
+ViT establishes that Transformer architectures are competitive for vision when paired with sufficient data and regularization.

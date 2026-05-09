@@ -62,7 +62,12 @@ class DocumentService:
         }
 
     def load_pdf(self, file_bytes: bytes, filename: str) -> list[dict]:
-        reader = PdfReader(io.BytesIO(file_bytes))
+        try:
+            reader = PdfReader(io.BytesIO(file_bytes))
+        except Exception as exc:
+            raise ValueError(
+                f"Could not read PDF ({filename}): corrupted, encrypted, or unsupported. {exc!s}"
+            ) from exc
         pages: list[dict] = []
         for i, page in enumerate(reader.pages):
             text = (page.extract_text() or "").strip()
@@ -72,7 +77,10 @@ class DocumentService:
         return pages
 
     def load_docx(self, file_bytes: bytes, filename: str) -> list[dict]:
-        doc = DocxDocument(io.BytesIO(file_bytes))
+        try:
+            doc = DocxDocument(io.BytesIO(file_bytes))
+        except Exception as exc:
+            raise ValueError(f"Could not read Word document ({filename}): {exc!s}") from exc
         paragraphs = [p.text.strip() for p in doc.paragraphs if p.text.strip()]
         pages: list[dict] = []
         page_number = 1

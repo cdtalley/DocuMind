@@ -2,12 +2,24 @@ from typing import Literal, Optional
 
 from pydantic import BaseModel, Field
 
+SectionFilter = Literal[
+    "abstract",
+    "introduction",
+    "methodology",
+    "experiments",
+    "results",
+    "conclusion",
+]
+
 
 class QueryRequest(BaseModel):
     query: str = Field(min_length=1, max_length=2000)
-    top_k: int = Field(default=6, ge=1, le=20)
+    top_k: int = Field(default=6, ge=1, le=24)
     query_mode: Literal["general", "compare", "methodology", "datasets", "reproduce"] = "general"
-    section_filter: Optional[str] = None
+    section_filter: Optional[SectionFilter] = Field(
+        default=None,
+        description="Restrict retrieval to chunks whose detected section matches (see chunker metadata).",
+    )
 
 
 class ArxivFetchRequest(BaseModel):

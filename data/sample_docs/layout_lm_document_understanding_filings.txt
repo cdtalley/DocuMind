@@ -1,0 +1,15 @@
+LayoutLMv3 for Structured Table Extraction from Annual Reports
+Document AI Summary
+2022
+
+Abstract
+We fine-tune multimodal transformers on PDF page images and token coordinates to extract balance sheet line items for fundamental databases.
+
+Methodology
+Detection heads predict cell spans; reading order modules reduce errors on multi-column layouts; human-in-the-loop corrects low-confidence extractions.
+
+Datasets
+Internal annotations on 10-K PDFs; evaluation uses tree-edit distance versus analyst gold tables.
+
+Results
+Model reduces manual keying effort by forty percent on dense financial tables; OCR noise remains dominant error mode.

@@ -1,0 +1,15 @@
+Graph Attention Networks for Suspicious Subgraph Detection in Transaction Networks
+Financial Crime Analytics Paper (summarized)
+2021
+
+Abstract
+We detect anomalous communities in bipartite customer-merchant graphs using attention layers with temporal decay on edge timestamps.
+
+Methodology
+Mini-batch training samples ego-networks; class imbalance handled via focal loss; explanations aggregate attention weights on adjacent accounts.
+
+Datasets
+Labeled alerts from internal case management are paired with public graph benchmarks (Elliptic-style topology, anonymized features).
+
+Results
+GAT variants improve precision at top-decile review versus logistic features alone; false positives concentrate in seasonal merchant categories.

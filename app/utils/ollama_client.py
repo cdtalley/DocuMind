@@ -22,21 +22,26 @@ class OllamaClient:
             "stream": False,
             "options": {"temperature": temperature},
         }
+        last_err: BaseException | None = None
         for attempt in range(3):
             try:
                 response = requests.post(url, json=payload, timeout=120)
                 response.raise_for_status()
-                return response.json()["message"]["content"]
-            except Exception:
+                data = response.json()
+                msg = data.get("message") or {}
+                content = msg.get("content") if isinstance(msg, dict) else None
+                if not content:
+                    raise ValueError(f"Unexpected Ollama response shape: {repr(data)[:500]}")
+                return str(content)
+            except Exception as exc:
+                last_err = exc
                 if attempt < 2:
                     time.sleep(2)
                 else:
                     raise OllamaConnectionError(
-                        f"Ollama LLM not reachable at {self.base_url}. Run: ollama serve"
-                    )
-        raise OllamaConnectionError(
-            f"Ollama LLM not reachable at {self.base_url}. Run: ollama serve"
-        )
+                        f"Ollama LLM error at {self.base_url} after retries: {last_err!s}"
+                    ) from last_err
+        raise AssertionError("unreachable")
 
     def embed(self, text: str) -> list[float]:
         url = f"{self.base_url}/api/embeddings"

@@ -1,0 +1,15 @@
+Deep Reinforcement Learning for Smart Order Routing with Latency-Aware Rewards
+Execution Research (summarized)
+2022
+
+Abstract
+Agents choose venue sequences under stochastic fill models; rewards blend shortfall, fees, and SLA penalties with entropy bonuses for exploration.
+
+Methodology
+Proximal policy optimization on simulated environments calibrated from historical venue performance; safe policy updates constrain divergence from baseline routers.
+
+Datasets
+Venue-level fills and quote updates from US equities; simulation replays order book snapshots.
+
+Results
+Policies reduce median shortfall versus static rules in volatile opens; sim-to-real gaps addressed via domain randomization on latency.

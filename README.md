@@ -45,7 +45,26 @@ Research libraries grow fast: PDFs from arXiv, notes, half-read papers. Answerin
 - **Section filter** (optional) for focused retrieval
 - **Paper library:** list, detail, delete
 - **Collection stats** (chunks, paper count)
-- Starter **sample docs** in `data/sample_docs/` (auto-seeded when Ollama is available and docs aren’t already present)
+- **Large starter corpus** in `data/sample_docs/` (**40+** text briefs: core ML, vision, NLP, graphs, time series, alignment, plus **institutional-style** summaries spanning risk, markets, compliance-adjacent ML, and ops — useful for stress-testing retrieval breadth). Bundled papers use stable ids `sample_*`. When `SAMPLE_CORPUS_VERSION` in settings changes, those rows are purged and re-indexed on API startup (requires Ollama).
+- **Batch backfill:** `scripts/bulk_ingest_arxiv.py` + `data/arxiv_seed_list.txt` to grow the library toward **hundreds of papers** (respect arXiv rate limits; run against a live API with Ollama).
+
+---
+
+## Production operations & scale
+
+Patterns here match what serious teams ship behind a real RAG product: **observability hooks**, **dependency-aware readiness**, **tight CORS**, optional **host allowlists**, and **container packaging**.
+
+| Concern | What to use |
+|--------|-------------|
+| **Liveness** | `GET /health/live` — process up (orchestrator keep-alive). |
+| **Readiness** | `GET /health/ready` — **200** when Ollama + Chroma are usable; **503** otherwise (Kubernetes / load balancer drain). |
+| **Full status** | `GET /health` — models, collection stats, degraded vs ok. |
+| **Tracing** | Every response includes **`X-Request-ID`**; logs include `request_id`. |
+| **Hardening** | `.env`: `APP_ENV`, `LOG_LEVEL`, `TRUSTED_HOSTS`, `DISABLE_OPENAPI`, `CORS_ORIGINS` / `CORS_ALLOW_ALL`. |
+| **Docker** | `docker compose up --build` — API on **8001**, persistent Chroma volume; set `OLLAMA_BASE_URL` to reach Ollama (defaults to `host.docker.internal` on Docker Desktop). |
+| **Corpus growth** | Add `.txt` under `data/sample_docs/` and bump `SAMPLE_CORPUS_VERSION`, or bulk-ingest arXiv IDs. |
+
+**Interview narrative:** In conversations about “production RAG,” anchor on **concrete** decisions: retrieval depth, chunking, evaluation, failure behavior when the LLM or index is down, auditability of citations, and how you refreshed the index. This repository is a **technical reference implementation** you can walk through line-by-line — it does not substitute for articulating *your* ownership and metrics at past employers.
 
 ---
 

@@ -1,0 +1,15 @@
+FinBERT and Hierarchical Attention for Multi-Section SEC Filing Analysis
+Internal NLP Research Note (summarized)
+2020
+
+Abstract
+We fine-tune transformer encoders on 10-K and 10-Q sections to predict credit migration indicators and earnings surprises, with section-aware pooling to respect document structure.
+
+Methodology
+Models concatenate MD&A, Risk Factors, and Financial Statements sub-spans; we apply Longformer-style attention windows for documents exceeding 4096 subword tokens.
+
+Datasets
+Training draws from EDGAR 2008–2019 filings paired with quarterly outcomes; development uses time-based splits only.
+
+Experiments
+Metrics include AUROC for downgrade within four quarters and RMSE for EPS surprise; ablations show Risk Factors contribute disproportionately to tail-risk prediction.

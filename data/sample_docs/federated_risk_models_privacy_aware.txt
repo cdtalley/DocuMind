@@ -1,0 +1,15 @@
+Federated Learning for Anti-Money Laundering Scores with Differential Privacy Guarantees
+Privacy Engineering Working Paper (summarized)
+2022
+
+Abstract
+We train graph-augmented tabular models across regional silos using federated averaging with gradient clipping and Gaussian noise, targeting epsilon-delta DP budgets compatible with internal audit.
+
+Methodology
+Each silo computes local updates on transaction graphs with temporal neighborhood features; secure aggregation reduces single-party visibility of raw gradients.
+
+Datasets
+Synthetic mixtures mirror SWIFT-like message features and Kaggle IEEE-CIS style tabular attributes; labels are highly imbalanced.
+
+Results
+Utility loss versus centralized training remains under five AUC points at epsilon=8; larger graphs benefit from knowledge distillation from a public teacher model.

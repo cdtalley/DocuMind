@@ -1,0 +1,18 @@
+Wide & Deep Learning for Recommender Systems
+Heng-Tze Cheng et al., Google
+2016
+
+Abstract
+The Wide & Deep architecture jointly trains a shallow linear model with cross-product feature interactions (wide) alongside a deep neural network embedding tower (deep) for app recommendation CTR prediction.
+
+Methodology
+Wide component memorizes sparse co-occurrences while deep component generalizes through dense embeddings of categorical features. The two towers are jointly optimized with logistic loss on binary install labels.
+
+Datasets
+Production-scale logs include anonymized user events and app impressions from mobile app stores. Public experiments often cite MovieLens as an academic analogue for collaborative filtering baselines, though production scale differs.
+
+Experiments
+Offline metrics include AUC and calibration while online A/B tests measure install rate and long-term engagement.
+
+Results
+The hybrid model improved offline AUC and online conversion versus wide-only and deep-only variants in reported experiments.

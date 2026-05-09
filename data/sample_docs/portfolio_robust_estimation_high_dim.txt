@@ -1,0 +1,15 @@
+Robust Covariance Shrinkage and Graphical Lasso for High-Dimensional Portfolio Construction
+Quant Research Methods Survey
+2019
+
+Abstract
+We compare Ledoit-Wolf shrinkage, factor-model structured estimators, and sparse inverse covariance selection under non-stationary equity return panels relevant to global equity books.
+
+Methodology
+Stability selection on graphical lasso paths identifies sparse precision matrices; turnover penalties integrate with mean-variance optimizers under long-only and sector-neutral constraints.
+
+Datasets
+Experiments use MSCI World constituents and Russell 3000 subsets with monthly rebalancing; stress tests apply historical 2008 and 2020 windows.
+
+Results
+Shrinkage dominates sample covariance in out-of-sample Sharpe; sparse models reduce concentration in idiosyncratic names during correlation spikes.

@@ -1,0 +1,15 @@
+Hybrid Neural-GARCH Models for Intraday Volatility Forecasting
+Volatility Research Brief
+2021
+
+Abstract
+We combine GARCH structure on daily variance with neural networks modeling intraday seasonalities and news surprise embeddings.
+
+Methodology
+Two-stage estimation with backprop through volatility recursion approximations; regularization anchors parameters near econometric baselines.
+
+Datasets
+US equity futures and FX spot at five-minute bars; evaluation uses QLIKE and VaR error.
+
+Results
+Hybrids outperform pure neural nets on long horizons where mean reversion dominates; training stability benefits from warm-starting from GARCH fits.

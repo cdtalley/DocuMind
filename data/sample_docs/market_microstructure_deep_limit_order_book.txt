@@ -1,0 +1,15 @@
+Deep Limit Order Book Representations for Short-Horizon Price Movement Prediction
+Zhang, Zohren, Roberts (synthetic brief for retrieval benchmarking)
+2021
+
+Abstract
+We study convolutional and attention architectures over normalized L2 order book tensors for predicting mid-price changes at the next tick, emphasizing leakage-safe splits by trading session and instrument.
+
+Methodology
+Architectures include deep CNNs over multi-level bid/ask stacks, dilated temporal convolutions, and Transformer encoders with relative time embeddings. Training uses cross-entropy and Huber losses on directional labels derived from future mid quotes.
+
+Datasets
+Experiments use FI-2010 and proprietary LOB snapshots anonymized to five price levels; evaluation reports accuracy, F1, and Matthews correlation on stratified time splits.
+
+Results
+Attention models modestly outperform CNNs when depth exceeds eight levels; calibration via temperature scaling improves probability quality for downstream risk limits.

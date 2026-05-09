@@ -1,7 +1,7 @@
 import requests
 import streamlit as st
 
-API_BASE_URL = "http://localhost:8000"
+API_BASE_URL = "http://127.0.0.1:8001"
 
 st.set_page_config(page_title="DocuMind", page_icon="🔬", layout="wide")
 st.title("🔬 DocuMind")
@@ -48,7 +48,7 @@ with tabs[0]:
         "Section Filter",
         ["All Sections", "abstract", "introduction", "methodology", "experiments", "results", "conclusion"],
     )
-    top_k = st.slider("Top K", 3, 15, 6)
+    top_k = st.slider("Top K", 3, 24, 6)
     query = st.text_area(
         "Question", placeholder="e.g. What datasets were used for tabular fraud detection?"
     )

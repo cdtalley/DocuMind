@@ -68,5 +68,6 @@ async def ingest_file(
 async def delete_ingested_document(
     doc_id: str, embedding_service: ChromaEmbeddingService = Depends(get_embedding_service)
 ) -> dict:
-    deleted = embedding_service.delete_document(doc_id)
-    return {"deleted": deleted, "doc_id": doc_id}
+    if not embedding_service.delete_document(doc_id):
+        raise HTTPException(status_code=404, detail=f"No indexed document: {doc_id}")
+    return {"deleted": True, "doc_id": doc_id}

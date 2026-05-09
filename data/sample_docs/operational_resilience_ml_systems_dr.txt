@@ -1,0 +1,15 @@
+Disaster Recovery and Active-Active Patterns for Low-Latency ML Inference Services
+SRE / MLOps Playbook Excerpt
+2023
+
+Abstract
+We document RTO/RPO targets, health probes, traffic shadowing, and embedding store replication for retrieval services supporting document QA.
+
+Methodology
+Kubernetes readiness gates on /health/ready; blue-green releases; chaos experiments on vector database partitions.
+
+Datasets
+Synthetic load tests reproduce peak query rates; failover drills measure staleness of embeddings.
+
+Results
+Active-active cuts failover time below one minute when object storage replication lags are bounded; cost tradeoffs favor regional pairs over triple-active.

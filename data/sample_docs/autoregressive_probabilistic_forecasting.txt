@@ -1,0 +1,18 @@
+Deep AR: Probabilistic Forecasting with Autoregressive Recurrent Networks
+David Salinas, Valentin Flunkert, Jan Gasthaus
+2020
+
+Abstract
+Deep AR models univariate and multivariate time series probabilistic forecasts using an autoregressive recurrent network that outputs parametric distributions or samples for future horizons.
+
+Methodology
+The network consumes lagged targets and known future covariates when available, producing Gaussian or Student-t output heads per horizon step during training. Training maximizes likelihood with scaling strategies for noise and seasonality.
+
+Datasets
+Empirical studies include electricity load time series, traffic speed measurements, and retail sales datasets with strong seasonality. Public electricity benchmark datasets are used for reproducibility comparisons against classical ARIMA and Prophet baselines.
+
+Experiments
+Metrics include continuous ranked probability score (CRPS) and pinball loss across forecast horizons. Ablations examine embedding of categorical calendar features.
+
+Results
+Deep AR achieves competitive probabilistic accuracy on benchmark energy and retail series and supports global models across many related SKU-level series.

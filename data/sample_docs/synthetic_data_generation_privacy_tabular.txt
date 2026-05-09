@@ -1,0 +1,15 @@
+Generative Adversarial Networks for Privacy-Preserving Synthetic Tabular Banking Data
+Synthetic Data Workshop Paper
+2023
+
+Abstract
+We train CTGAN and diffusion-based tabular models under DP-SGD to release synthetic loan datasets preserving marginal and correlation structure for vendor collaboration.
+
+Methodology
+Evaluation uses propensity MMD, correlation error, and downstream model utility on synthetics-only training; membership inference attacks quantify privacy.
+
+Datasets
+Retail mortgage and card transaction features anonymized; rare category handling uses mode collapse guards.
+
+Results
+Diffusion models reduce correlation error versus GANs at moderate epsilon; utility gap remains for tail quantiles.

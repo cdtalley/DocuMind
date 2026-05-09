@@ -1,11 +1,27 @@
-version: "3.9"
+# DocuMind API + persistent Chroma. Run Ollama on the host (or add an ollama service on Linux).
+# API: http://127.0.0.1:8001  |  Point NEXT_PUBLIC_API_BASE_URL at this URL from the Next.js app.
 services:
-  documind:
+  documind-api:
     build: .
     ports:
-      - "8000:8000"
+      - "8001:8001"
     volumes:
-      - ./chroma_db:/app/chroma_db
-      - ./data:/app/data
-    env_file: .env
-    network_mode: host
+      - chroma_data:/app/chroma_db
+      - ./data:/app/data:ro
+    environment:
+      OLLAMA_BASE_URL: http://host.docker.internal:11434
+      CHROMA_PERSIST_DIR: /app/chroma_db
+      APP_ENV: production
+      DISABLE_OPENAPI: "false"
+      LOG_LEVEL: INFO
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8001/health/live')"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+volumes:
+  chroma_data:

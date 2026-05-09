@@ -1,0 +1,19 @@
+Learning Transferable Visual Models From Natural Language Supervision
+Alec Radford, Jong Wook Kim, Chris Hallacy, Aditya Ramesh, Gabriel Goh, Sandhini Agarwal, Girish Sastry, Amanda Askell, Pamela Mishkin, Jack Clark, Gretchen Krueger, Ilya Sutskever
+2021
+arXiv:2103.00020
+
+Abstract
+CLIP trains image and text encoders jointly with a contrastive objective so visual representations align with natural language descriptions without task-specific class labels at scale.
+
+Methodology
+The approach collects image-text pairs from the public Internet and learns dual encoders that map images and text into a shared embedding space. Training maximizes similarity of correct pairings while pushing mismatched pairings apart.
+
+Datasets training
+Training uses a large proprietary dataset of 400 million image-text pairs collected from public web sources. Evaluation uses zero-shot transfer to ImageNet classification, MS-COCO retrieval-style tasks, and robustness stress tests.
+
+Experiments
+The paper studies model scale (ResNet and Transformer vision backbones), batch size effects for contrastive learning, and prompt engineering for zero-shot classifiers built from natural language templates.
+
+Results
+CLIP demonstrates strong zero-shot performance on ImageNet and competitive results on several vision benchmarks when adapted linearly, motivating later vision-language systems.

@@ -1,0 +1,19 @@
+Distributed Representations of Words and Phrases and their Compositionality
+Tomas Mikolov, Ilya Sutskever, Kai Chen, Greg Corrado, Jeffrey Dean
+2013
+arXiv:1310.4546
+
+Abstract
+This work improves neural language models by learning high-quality word vectors efficiently on large corpora. A key contribution is negative sampling and subsampling of frequent words to speed training.
+
+Methodology
+The Skip-gram architecture predicts surrounding context words from a center word. Hierarchical softmax and negative sampling reduce computational cost compared to full softmax over the vocabulary. Phrase vectors are built by scoring bigrams and multi-word expressions repeatedly.
+
+Datasets
+Training data includes part of the Google News corpus (about 100 billion words). The authors also evaluate on analogy tasks derived from semantic and syntactic questions, using subsets inspired by WordNet-style relations.
+
+Experiments
+The paper compares vector quality versus model size and training time. It demonstrates strong performance on word similarity benchmarks and on syntactic analogy tasks such as "king - man + woman ≈ queen."
+
+Results
+The released vectors became a standard baseline for NLP feature engineering until subword and contextual embeddings superseded static vectors in many pipelines.

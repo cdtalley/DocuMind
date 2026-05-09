@@ -1,0 +1,15 @@
+Red-Teaming Retrieval-Augmented LLMs for Financial Question Answering
+Safety & Controls Note
+2024
+
+Abstract
+We systematize adversarial probes for prompt injection, policy leakage, and ungrounded advice in internal document QA assistants grounded on retrieval.
+
+Methodology
+Automated tests inject malicious chunks into synthetic corpora; human reviewers score harmfulness; mitigation layers include citation-required templates and tool allowlists.
+
+Datasets
+Mix of public finance FAQs and synthetic policy corpora with planted contradictions.
+
+Results
+Grounding cuts unverified claims by half but does not eliminate social engineering via instruction overrides; layered defenses required.

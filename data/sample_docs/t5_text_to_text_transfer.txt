@@ -1,0 +1,19 @@
+Exploring the Limits of Transfer Learning with a Unified Text-to-Text Transformer
+Colin Raffel, Noam Shazeer, Adam Roberts, Katherine Lee, Sharan Narang, Michael Matena, Yanqi Zhou, Wei Li, Peter J. Liu
+2019
+arXiv:1910.10683
+
+Abstract
+T5 reframes NLP tasks into a single text-to-text format so one encoder-decoder Transformer can be pretrained and fine-tuned across diverse tasks with minimal architectural changes.
+
+Methodology
+The model uses a standard Transformer encoder-decoder. Pretraining follows a denoising objective on spans of corrupted text drawn from unlabeled corpora. Fine-tuning reformulates classification, regression (as text targets), and generation tasks as text-to-text mappings.
+
+Datasets
+Pretraining draws from the Colossal Clean Crawled Corpus (C4), a large cleaned web text corpus. Fine-tuning and evaluation include GLUE and SuperGLUE benchmarks, SQuAD-style question answering, and summarization on CNN/Daily Mail where models generate abstractive summaries.
+
+Experiments
+Systematic scaling studies vary model size (millions to billions of parameters), training steps, and fine-tuning mixtures. The paper reports ablations on objective variants and on multi-task mixtures.
+
+Results
+T5-family models achieve strong multi-task performance and demonstrate that unifying task formats simplifies engineering while retaining competitive benchmark scores.

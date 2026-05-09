@@ -46,7 +46,14 @@ class ChromaEmbeddingService:
         rows.sort(key=lambda x: x["distance"])
         return rows
 
+    def document_has_chunks(self, doc_id: str) -> bool:
+        res = self.collection.get(where={"doc_id": doc_id}, limit=1)
+        ids = res.get("ids") or []
+        return len(ids) > 0
+
     def delete_document(self, doc_id: str) -> bool:
+        if not self.document_has_chunks(doc_id):
+            return False
         self.collection.delete(where={"doc_id": doc_id})
         return True
 

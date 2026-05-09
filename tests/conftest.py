@@ -31,7 +31,9 @@ class FakeEmbeddingService:
         return rows[:top_k]
 
     def delete_document(self, doc_id: str) -> bool:
-        self.store.pop(doc_id, None)
+        if doc_id not in self.store:
+            return False
+        del self.store[doc_id]
         return True
 
     def list_papers(self) -> list[dict]:

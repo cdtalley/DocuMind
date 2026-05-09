@@ -46,3 +46,20 @@ class HealthResponse(BaseModel):
     llm_model: str
     embedding_model: str
     collection_stats: CollectionStats
+
+
+class LivenessResponse(BaseModel):
+    """Process is running (Kubernetes / load balancer liveness)."""
+
+    status: str = "alive"
+
+
+class ReadinessResponse(BaseModel):
+    """Dependency checks for traffic (embed + LLM available)."""
+
+    ready: bool
+    ollama_available: bool
+    chroma_reachable: bool
+    total_chunks: int
+    paper_count: int
+    detail: str = ""

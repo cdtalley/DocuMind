@@ -1,0 +1,15 @@
+Message Passing Neural Networks for Counterparty Network Exposure and Contagion Stress
+Credit Portfolio Analytics
+2022
+
+Abstract
+We embed bilateral exposure graphs to estimate incremental default risk under correlated shocks, comparing GNN outputs to analytical netting approximations.
+
+Methodology
+Layers propagate nominal and collateral-adjusted exposures; node features include ratings and sector; global readouts feed scenario loss distributions.
+
+Datasets
+Simulated networks calibrated to public filings topology; stress parameters align with CCAR-style shocks.
+
+Results
+GNNs capture nonlinearities from cyclical connectivity missed by independent defaults; runtime scales linearly in edges with batching.

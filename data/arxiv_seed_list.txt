@@ -1,0 +1,17 @@
+# Curated arXiv IDs for bulk ingest (run: python scripts/bulk_ingest_arxiv.py)
+# Mix of landmark + applied ML; respect arXiv rate limits (default delay between calls).
+1706.03762
+1810.04805
+1409.3215
+1506.0146
+1611.01603
+2005.14165
+2010.11929
+2103.14030
+1904.09751
+1803.02155
+1606.00908
+1711.07971
+2009.03389
+2106.09685
+1910.02054

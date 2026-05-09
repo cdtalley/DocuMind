@@ -1,0 +1,19 @@
+Latent ODEs for Irregularly-Sampled Time Series
+Yulia Rubanova, Ricky T. Q. Chen, David Duvenaud
+2019
+arXiv:1907.03907
+
+Abstract
+Neural ordinary differential equation (ODE) models represent latent state dynamics with a continuous-time neural vector field, enabling sequence modeling when observations arrive at irregular timestamps.
+
+Methodology
+An ODE solver integrates latent dynamics between observations; an RNN or recognition network produces an approximate posterior over initial states. For partially observed systems, latent ODE combines variational inference with adaptive-step solvers.
+
+Datasets
+Experiments include synthetic ODE-driven data and physiological time series derived from public healthcare-style benchmarks where sampling is non-uniform. Rotating MNIST sequences are used as a controlled video-like benchmark with irregular frames.
+
+Experiments
+The paper reports likelihood and imputation metrics, emphasizing stability across adaptive solvers and trade-offs between expressivity and training time.
+
+Results
+Latent ODE models outperform naive discretization approaches when timestamps are irregular, at additional computational cost from numerical integration.

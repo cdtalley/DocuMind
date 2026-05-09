@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import logging
+
 from fastapi import APIRouter, Depends, HTTPException
 
 from app.main import get_embedding_service, get_ollama_client, get_rag_service
@@ -11,6 +13,7 @@ from app.utils.ollama_client import OllamaClient
 from app.utils.ollama_client import OllamaConnectionError
 
 router = APIRouter()
+logger = logging.getLogger("documind.query")
 
 
 @router.post("/query", response_model=AnswerResponse)
@@ -32,6 +35,14 @@ async def query_papers(
         raise HTTPException(
             status_code=503,
             detail=f"Ollama is unavailable. Start Ollama first (`ollama serve`). Details: {exc}",
+        ) from exc
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.exception("RAG query failed: %s", exc)
+        raise HTTPException(
+            status_code=500,
+            detail="Answer generation failed. Check API logs for details.",
         ) from exc
 
 

@@ -1,0 +1,15 @@
+Deep Ensembles and MC Dropout for Value-at-Risk Backtesting Under Heavy Tails
+Market Risk Methods
+2020
+
+Abstract
+We compare frequentist VaR models with neural distributional regression heads producing predictive quantiles, using Bernoulli and independence tests on violation series.
+
+Methodology
+Ensembles of MLPs trained with heteroscedastic Gaussian outputs; alternative uses Student-t emission with learned degrees of freedom.
+
+Datasets
+Multi-asset portfolio P&L windows including COVID shock; rolling 250-day estimation.
+
+Results
+Deep ensembles reduce clustering of violations versus historical simulation in stress periods; regulators prefer transparent benchmark overlays.

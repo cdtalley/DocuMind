@@ -1,0 +1,15 @@
+Discrete-Time Survival Models with Neural Hazards for Revolving Credit Attrition
+Consumer Risk Paper (summarized)
+2019
+
+Abstract
+We estimate monthly churn hazards using partial likelihood extensions with embedding layers for behavioral utilization sequences.
+
+Methodology
+Networks output logits for each discrete interval; time-varying covariates include macro indices; penalization discourages unstable hazards.
+
+Datasets
+Millions of anonymized accounts with multi-year horizons; censored observations handled correctly.
+
+Results
+Neural hazards improve integrated Brier score versus Cox with handcrafted splines; explainability uses time-local SHAP aggregates.

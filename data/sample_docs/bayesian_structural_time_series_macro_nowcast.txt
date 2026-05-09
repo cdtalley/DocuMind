@@ -1,0 +1,15 @@
+Bayesian Structural Time Series for Macro Nowcasting with Mixed-Frequency Indicators
+Econometrics Desk Note
+2018
+
+Abstract
+We extend BSTS with stochastic volatility and dynamic regression on weekly and monthly predictors to nowcast GDP and inflation surprises.
+
+Methodology
+State-space MCMC and variational approximations trade accuracy for runtime; spike-and-slab priors perform feature selection on hundreds of series.
+
+Datasets
+FRED-MD style macro panels; evaluation uses real-time vintages to avoid lookahead.
+
+Results
+BSTS ensembles beat naive AR in RMSE during regime shifts; uncertainty bands improve scenario narrative quality.

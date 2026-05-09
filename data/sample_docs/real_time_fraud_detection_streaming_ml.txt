@@ -1,0 +1,15 @@
+Streaming Machine Learning for Payment Fraud with Concept Drift Adaptation
+Payments Risk Engineering
+2022
+
+Abstract
+We deploy online logistic and tree models updated via incremental learning on Kafka streams, with drift detectors triggering full retrains.
+
+Methodology
+Features computed in Flink windows; model server supports shadow mode and canary releases; feedback latency monitored for label delay bias.
+
+Datasets
+Card-not-present transactions in EU and US; severe class imbalance.
+
+Results
+Online updates reduce false positives after merchant rule changes; governance requires immutable model versioning and audit logs.

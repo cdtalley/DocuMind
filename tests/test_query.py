@@ -7,6 +7,19 @@ def test_query_empty_collection(client) -> None:
     assert response.json()["has_answer"] is False
 
 
+def test_query_invalid_section_returns_422(client) -> None:
+    response = client.post(
+        "/api/v1/query",
+        json={
+            "query": "test",
+            "top_k": 4,
+            "query_mode": "general",
+            "section_filter": "not-a-real-section",
+        },
+    )
+    assert response.status_code == 422
+
+
 def test_query_general_mode(client) -> None:
     ingest = client.post(
         "/api/v1/ingest",

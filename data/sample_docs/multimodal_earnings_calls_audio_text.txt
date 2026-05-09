@@ -1,0 +1,15 @@
+Multimodal Transformers Fusing Earnings Call Audio Prosody with Transcript Text
+Equity Research ML Note
+2023
+
+Abstract
+We predict post-earnings drift using wav2vec-style encoders aligned to ASR transcripts with cross-modal contrastive pretraining.
+
+Methodology
+Audio segments align to sentence boundaries; fusion uses co-attention; training optimizes multi-task objectives on direction and volatility labels.
+
+Datasets
+S&P 500 historical calls 2015–2022 with price reactions; held-out sectors test generalization.
+
+Results
+Prosody features add incremental R-squared beyond text alone for guidance-heavy names; data governance restricts external sharing.

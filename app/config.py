@@ -1,4 +1,5 @@
 from functools import lru_cache
+from typing import Literal
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -18,8 +19,35 @@ class Settings(BaseSettings):
     ENABLE_FALLBACK_RETRIEVAL: bool = True
     FALLBACK_TOP_N: int = 3
     KEYWORD_RERANK_WEIGHT: float = 0.15
+    # Bump when `data/sample_docs/` changes; triggers purge + re-index of `sample_*` docs on startup.
+    SAMPLE_CORPUS_VERSION: str = "5"
+    # Comma-separated origins. When CORS_ALLOW_ALL is true, any origin is accepted (local demos only).
+    CORS_ORIGINS: str = (
+        "http://127.0.0.1:3002,http://localhost:3002,"
+        "http://127.0.0.1:3000,http://localhost:3000"
+    )
+    CORS_ALLOW_ALL: bool = False
+    # development | staging | production — affects docs visibility and logging expectations
+    APP_ENV: Literal["development", "staging", "production"] = "development"
+    LOG_LEVEL: str = "INFO"
+    # Comma-separated Host headers (e.g. api.example.com,localhost). Empty disables TrustedHostMiddleware.
+    TRUSTED_HOSTS: str = ""
+    # When True, OpenAPI /docs and /redoc are disabled (recommended behind ingress in production).
+    DISABLE_OPENAPI: bool = False
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
+
+    def trusted_host_list(self) -> list[str] | None:
+        raw = self.TRUSTED_HOSTS.strip()
+        if not raw:
+            return None
+        return [h.strip() for h in raw.split(",") if h.strip()]
+
+    def cors_origin_list(self) -> list[str]:
+        if self.CORS_ALLOW_ALL:
+            return ["*"]
+        parts = [p.strip() for p in self.CORS_ORIGINS.split(",") if p.strip()]
+        return parts if parts else ["http://127.0.0.1:3002", "http://localhost:3002"]
 
 
 @lru_cache

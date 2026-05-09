@@ -1,0 +1,15 @@
+Contrastive Learning for Self-Supervised Tabular Representations in Credit Modeling
+Retail Risk ML Brief
+2023
+
+Abstract
+We learn embeddings for loan application tables using column-wise masking and Siamese objectives, then fine-tune for default and loss-given-default prediction.
+
+Methodology
+Encoder combines piecewise linear embeddings for numeric fields and entity embeddings for categoricals; negatives drawn within mini-batches across time cohorts.
+
+Datasets
+Prime and subprime mortgage vintages with regulatory stress labels; strict temporal splits.
+
+Results
+Self-supervised pretraining improves AUC in low-label regimes; fairness audits monitor disparities across protected proxy features.

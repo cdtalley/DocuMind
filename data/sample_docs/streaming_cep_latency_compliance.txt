@@ -1,0 +1,15 @@
+Complex Event Processing for Real-Time Limit Breach Detection Under Sub-10ms Latency
+Systems Architecture Note
+2021
+
+Abstract
+We describe a CEP pipeline combining sliding windows, temporal operators, and compiled finite-state monitors for position and Greeks limits across equities and listed derivatives.
+
+Methodology
+Rules compile to deterministic automata; hot paths avoid GC pressure via pre-allocated ring buffers; back-pressure policies shed non-critical analytics under overload.
+
+Datasets
+Replay uses captured market data feeds and internal risk snapshots from 2019 stress week.
+
+Results
+p99 end-to-end latency stays below eight milliseconds on commodity hardware when co-located with matching engines; false positives drop with two-stage confirmation filters.

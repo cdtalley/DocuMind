@@ -6,12 +6,14 @@ import uuid
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import Depends, FastAPI, Request
+from fastapi import Depends, FastAPI, HTTPException, Request
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import Response
+from fastapi.responses import JSONResponse, Response
+from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from app.config import get_settings
-from app.models.response_models import CollectionStats, HealthResponse
+from app.models.response_models import CollectionStats, HealthResponse, LivenessResponse, ReadinessResponse
 from app.services.document_service import DocumentService
 from app.services.embedding_service import ChromaEmbeddingService
 from app.services.rag_service import RAGService
@@ -36,11 +38,31 @@ def seed_sample_docs() -> None:
     if ollama_client is None or not ollama_client.health_check().get("available", False):
         logger.info("Skipping sample doc indexing because Ollama is unavailable.")
         return
-    sample_dir = Path("data/sample_docs")
+    project_root = Path(__file__).resolve().parent.parent
+    sample_dir = project_root / "data" / "sample_docs"
     if not sample_dir.exists():
         return
 
-    for sample_file in sample_dir.glob("*.txt"):
+    persist = Path(settings.CHROMA_PERSIST_DIR)
+    persist.mkdir(parents=True, exist_ok=True)
+    marker = persist / ".sample_corpus_version"
+    target_version = settings.SAMPLE_CORPUS_VERSION
+    current_version = marker.read_text(encoding="utf-8").strip() if marker.exists() else ""
+
+    if current_version != target_version:
+        logger.info(
+            "Sample corpus version %s -> %s: refreshing bundled `sample_*` papers.",
+            current_version or "(none)",
+            target_version,
+        )
+        for paper in list(embedding_service.list_papers()):
+            if str(paper.get("doc_id", "")).startswith("sample_"):
+                embedding_service.delete_document(paper["doc_id"])
+        marker.write_text(target_version, encoding="utf-8")
+
+    for sample_file in sorted(sample_dir.glob("*.txt")):
+        if sample_file.name.startswith("."):
+            continue
         doc_id = f"sample_{sample_file.stem}"
         existing = [paper for paper in embedding_service.list_papers() if paper["doc_id"] == doc_id]
         if existing:
@@ -54,6 +76,7 @@ def seed_sample_docs() -> None:
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     global ollama_client, embedding_service, document_service, rag_service
+    logging.getLogger().setLevel(getattr(logging, settings.LOG_LEVEL.upper(), logging.INFO))
     chunker = DocumentChunker(chunk_size=settings.CHUNK_SIZE, chunk_overlap=settings.CHUNK_OVERLAP)
     ollama_client = OllamaClient(
         base_url=settings.OLLAMA_BASE_URL,
@@ -76,23 +99,55 @@ async def lifespan(_: FastAPI):
     logger.info("DocuMind shutting down")
 
 
+_openapi_url = None if settings.DISABLE_OPENAPI else "/openapi.json"
+_docs_url = None if settings.DISABLE_OPENAPI else "/docs"
+_redoc_url = None if settings.DISABLE_OPENAPI else "/redoc"
+
 app = FastAPI(
     title="DocuMind",
     description="Data Science Research Paper Intelligence — powered by local Ollama. Zero API costs.",
     version="1.0.0",
     lifespan=lifespan,
+    openapi_url=_openapi_url,
+    docs_url=_docs_url,
+    redoc_url=_redoc_url,
 )
 
+_cors_origins = settings.cors_origin_list()
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_methods=["*"],
+    allow_origins=_cors_origins,
+    allow_methods=["GET", "POST", "DELETE", "OPTIONS"],
     allow_headers=["*"],
+    allow_credentials=False,
 )
+
+_th = settings.trusted_host_list()
+if _th:
+    app.add_middleware(TrustedHostMiddleware, allowed_hosts=_th)
+
+
+@app.exception_handler(Exception)
+async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONResponse:
+    if isinstance(exc, HTTPException):
+        detail = exc.detail
+        if not isinstance(detail, str | list | dict):
+            detail = str(detail)
+        return JSONResponse(status_code=exc.status_code, content={"detail": detail})
+    if isinstance(exc, RequestValidationError):
+        return JSONResponse(status_code=422, content={"detail": exc.errors()})
+    rid = getattr(request.state, "request_id", None) or "unknown"
+    logger.error("request_id=%s unhandled error", rid, exc_info=exc)
+    return JSONResponse(
+        status_code=500,
+        content={"detail": "Internal server error.", "request_id": rid},
+    )
+
 
 @app.middleware("http")
 async def request_metrics_middleware(request: Request, call_next):
     request_id = str(uuid.uuid4())[:8]
+    request.state.request_id = request_id
     start = time.perf_counter()
     response: Response = await call_next(request)
     duration_ms = (time.perf_counter() - start) * 1000
@@ -152,6 +207,44 @@ async def health(
     )
 
 
+@app.get("/health/live", response_model=LivenessResponse)
+async def health_live() -> LivenessResponse:
+    return LivenessResponse()
+
+
+@app.get("/health/ready", response_model=None)
+async def health_ready(
+    client: OllamaClient = Depends(get_ollama_client),
+    embedding: ChromaEmbeddingService = Depends(get_embedding_service),
+) -> JSONResponse:
+    ollama_ok = bool(client.health_check().get("available", False))
+    chroma_ok = True
+    stats_raw: dict = {}
+    try:
+        stats_raw = embedding.collection_stats()
+    except Exception as exc:
+        chroma_ok = False
+        logger.error("readiness chroma check failed: %s", exc)
+    stats = CollectionStats(**stats_raw) if chroma_ok else None
+    ready = ollama_ok and chroma_ok
+    body = ReadinessResponse(
+        ready=ready,
+        ollama_available=ollama_ok,
+        chroma_reachable=chroma_ok,
+        total_chunks=stats.total_chunks if stats else 0,
+        paper_count=stats.paper_count if stats else 0,
+        detail="" if ready else "Ollama or vector store not ready for inference.",
+    )
+    code = 200 if ready else 503
+    return JSONResponse(status_code=code, content=body.model_dump())
+
+
 @app.get("/")
 async def root() -> dict:
-    return {"message": "DocuMind API", "docs": "/docs", "health": "/health"}
+    return {
+        "message": "DocuMind API",
+        "docs": None if settings.DISABLE_OPENAPI else "/docs",
+        "health": "/health",
+        "health_live": "/health/live",
+        "health_ready": "/health/ready",
+    }

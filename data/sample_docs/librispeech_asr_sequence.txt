@@ -1,0 +1,19 @@
+Deep Speech: Scaling up End-to-End Speech Recognition through Large Datasets and Models
+Awni Hannun, Carl Case, Jared Casper, Bryan Catanzaro, Greg Diamos, Erich Elsen, Ryan Prenger, Sanjeev Satheesh, Shubho Sengupta, Adam Coates
+2014
+arXiv:1412.5567
+
+Abstract
+This paper presents an end-to-end speech system using recurrent neural networks trained on large labeled speech datasets, aiming for robustness through data scale rather than hand-engineered pipelines.
+
+Methodology
+The acoustic model uses spectrogram features and layered RNNs with batch normalization where applicable. The system is trained with Connectionist Temporal Classification (CTC) so alignments are learned implicitly rather than via forced phoneme segmentation.
+
+Datasets
+The primary training resource is LibriSpeech, a corpus of read audiobooks derived from LibriVox that provides hundreds of hours of labeled English speech. Additional noisy conditions are considered to discuss generalization and robustness to channel variation.
+
+Experiments
+Word error rate (WER) is reported on LibriSpeech test-clean and test-other partitions. The paper emphasizes scaling effects: more data and wider/deeper models yield consistent WER reductions before saturation effects appear.
+
+Results
+The work provides evidence that end-to-end deep learning can be competitive on read speech benchmarks when paired with sufficient labeled audio and compute.

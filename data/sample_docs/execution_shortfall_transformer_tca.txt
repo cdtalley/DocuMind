@@ -1,0 +1,15 @@
+Sequence-to-Sequence Models for Execution Shortfall Prediction in Algorithmic Trading
+TCA Machine Learning Brief
+2023
+
+Abstract
+We forecast implementation shortfall using encoder-decoder Transformers over order and market microstructure event sequences, conditioning on strategy type and urgency.
+
+Methodology
+Inputs include child order arrivals, partial fills, spread, and depth imbalance time series; training minimizes quantile loss for tail-aware scheduling.
+
+Datasets
+Labels come from historical TCA databases across US and European cash equities; train/validate splits are by quarter.
+
+Results
+Models improve pinball loss versus gradient boosting on sparse features; calibration helps desk-level budget setting.

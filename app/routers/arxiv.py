@@ -32,11 +32,32 @@ async def fetch_arxiv(
         raise HTTPException(status_code=503, detail="Ollama is unavailable. Start Ollama first (`ollama serve`).")
 
     url = f"{settings.ARXIV_BASE_URL}/{arxiv_id}"
-    async with httpx.AsyncClient(follow_redirects=True, timeout=60.0) as client:
-        response = await client.get(url)
+    try:
+        async with httpx.AsyncClient(follow_redirects=True, timeout=60.0) as client:
+            response = await client.get(url)
+    except httpx.TimeoutException as exc:
+        raise HTTPException(
+            status_code=504,
+            detail="arXiv did not respond in time. Retry or check your network.",
+        ) from exc
+    except httpx.RequestError as exc:
+        raise HTTPException(
+            status_code=502,
+            detail=f"Could not reach arXiv export service: {exc!s}",
+        ) from exc
 
-    if response.status_code != 200:
+    if response.status_code == 404:
         raise HTTPException(status_code=404, detail=f"Paper not found on arXiv: {arxiv_id}")
+    if response.status_code >= 500:
+        raise HTTPException(
+            status_code=502,
+            detail=f"arXiv returned server error {response.status_code} for {arxiv_id}",
+        )
+    if response.status_code != 200:
+        raise HTTPException(
+            status_code=502,
+            detail=f"Unexpected arXiv response {response.status_code} for {arxiv_id}",
+        )
 
     doc_id = f"arxiv_{arxiv_id.replace('.', '_')}"
     filename = f"arxiv_{arxiv_id}.pdf"

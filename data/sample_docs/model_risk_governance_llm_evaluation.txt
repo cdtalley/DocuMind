@@ -1,0 +1,15 @@
+Model Risk Management for Large Language Models in Document-QA Workflows
+Governance Framework Draft (summarized)
+2024
+
+Abstract
+We extend SR 11-7 style lifecycle controls to LLM-augmented retrieval systems: conceptual soundness, ongoing monitoring, and independent validation of grounding and refusal behavior.
+
+Methodology
+Checklists cover training data provenance, prompt injection tests, citation fidelity audits, and drift monitors on embedding spaces; red teams probe policy violations.
+
+Datasets
+Evaluation suites mix public retrieval benchmarks and synthetic policy documents with labeled gold answers.
+
+Results
+Retrieval-augmented setups reduce hallucination rates versus pure generation but require chunk-level provenance logging for audit replay.

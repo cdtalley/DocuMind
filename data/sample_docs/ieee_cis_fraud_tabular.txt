@@ -1,0 +1,18 @@
+IEEE-CIS Fraud Detection: Tabular Learning Competition Data and Practical Constraints
+IEEE Computational Intelligence Society Competition Team (summarized technical brief)
+2019
+
+Abstract
+The IEEE-CIS fraud detection challenge provides high-dimensional tabular transaction features for binary fraud classification under severe class imbalance and anonymized fields, making it a standard stress test for gradient boosting and calibration methods.
+
+Methodology
+Participants typically employ tree ensembles with monotonic constraints in some variants, feature engineering on aggregations across identities and transaction time windows, and probability calibration or cost-sensitive thresholds.
+
+Datasets
+The primary dataset is the IEEE-CIS fraud transaction table distributed via Kaggle, including continuous and categorical attributes with masked semantics. Auxiliary identity tables link transactions to entities.
+
+Experiments
+Evaluation emphasizes area under ROC (AUC) and business-aligned metrics such as recall at fixed false positive rates. Many solutions combine stratified cross-validation and out-of-fold stacking.
+
+Results
+Strong baselines rely on XGBoost, LightGBM, and CatBoost ensembles with careful treatment of categoricals and leakage checks.

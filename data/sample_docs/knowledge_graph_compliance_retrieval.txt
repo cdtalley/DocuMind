@@ -1,0 +1,15 @@
+Retrieval over Enterprise Knowledge Graphs for Regulatory Interpretation Assistants
+Knowledge Engineering Brief
+2023
+
+Abstract
+We combine graph neural networks with sparse BM25 and dense vector retrieval over policy nodes, preserving lineage edges for explainability in compliance Q&A.
+
+Methodology
+Subgraph sampling around seed entities feeds a message-passing encoder; retrieved nodes align with transformer rerankers for final answer composition.
+
+Datasets
+Graphs encode cross-references between policy clauses, interpretations, and control standards; evaluation measures answer correctness with human review.
+
+Results
+Hybrid retrieval outperforms pure vector search on multi-hop questions requiring citation chains.

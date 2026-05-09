@@ -1,0 +1,19 @@
+Semi-Supervised Classification with Graph Convolutional Networks
+Thomas N. Kipf, Max Welling
+2017
+arXiv:1609.02907
+
+Abstract
+Graph Convolutional Networks (GCNs) perform semi-supervised node classification by stacking localized spectral graph convolutions that aggregate neighbor representations.
+
+Methodology
+Each layer applies a degree-normalized adjacency operator followed by linear transformation and ReLU. Only a small fraction of node labels are observed during training, while the model propagates supervision across edges.
+
+Datasets
+Experiments focus on citation network benchmarks: Cora, Citeseer, and Pubmed. Nodes represent documents, edges represent citation links, and features are sparse bag-of-words vectors.
+
+Experiments
+The paper reports classification accuracy with varying label rates and compares against label propagation and earlier graph embedding baselines.
+
+Results
+GCNs achieve competitive accuracy on Cora with clean training curves, and motivate deeper graph neural architectures for relational data.

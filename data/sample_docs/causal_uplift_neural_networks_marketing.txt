@@ -1,0 +1,15 @@
+Neural Networks for Heterogeneous Treatment Effect Estimation in Client Campaigns
+Applied Causal ML Note
+2020
+
+Abstract
+We compare T-learner, X-learner, and DragonNet-style architectures for uplift modeling on digital marketing experiments with high-dimensional client features.
+
+Methodology
+Propensity models use gradient boosting; outcome heads are multi-layer perceptrons with targeted regularization; cross-fitting reduces bias in doubly robust scores.
+
+Datasets
+Semi-synthetic data built from CRM features and randomized holdouts; outcomes include conversion and subsequent engagement.
+
+Results
+DragonNet variants stabilize value estimates in small treatment arms; calibration plots guide budget allocation curves.

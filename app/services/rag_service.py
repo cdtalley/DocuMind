@@ -6,12 +6,137 @@ from app.models.response_models import AnswerResponse, SourceCitation
 from app.services.embedding_service import ChromaEmbeddingService
 from app.utils.ollama_client import OllamaClient
 
+# Substrings matched in lowercased chunk text for structured dataset extraction (datasets mode).
+KNOWN_DATASET_HINTS: frozenset[str] = frozenset(
+    {
+        "wmt",
+        "glue",
+        "superglue",
+        "squad",
+        "multinli",
+        "coco",
+        "ms-coco",
+        "imagenet",
+        "cifar-10",
+        "cifar-100",
+        "mnist",
+        "fashion-mnist",
+        "higgs",
+        "allstate",
+        "bookscorpus",
+        "wikipedia",
+        "ieee-cis",
+        "kaggle",
+        "cora",
+        "citeseer",
+        "pubmed",
+        "librispeech",
+        "timit",
+        "google news",
+        "yahoo answers",
+        "cnn/daily mail",
+        "cnndm",
+        "wikitext",
+        "celeba",
+        "lsun",
+        "ytfcc100m",
+        "yfcc100m",
+        "open images",
+        "cityscapes",
+        "ade20k",
+        "movielens",
+        "criteo",
+        "avazu",
+        "uci",
+        "electricity",
+        "traffic",
+        "retail",
+        "bitcoin",
+        "ethereum",
+        "c4",
+        "jft-300m",
+        "imagenet-1k",
+        "wordnet",
+    }
+)
+
+# Shared rules: portfolio-grade depth must still be fully grounded.
+_GROUNDING = (
+    "You are DocuMind — a staff+ research synthesizer. Non-negotiable grounding:\n"
+    "- Use ONLY the context blocks. Never invent papers, metrics, datasets, URLs, hardware, or hyperparameter values.\n"
+    "- Every substantive claim needs a **Paper title** (exact from context) in the same bullet/paragraph or the adjacent one.\n"
+    "- When the text supports it, go deeper: 2–4 short paragraphs per ### subsection, nested bullets for mechanisms and ablations, "
+    "and optional blockquotes for ≤25-word verbatim fragments that appear exactly in the excerpt (quote marks in blockquote).\n"
+    "- If evidence is thin, say so and list gaps — never pad with speculation. Skip generic filler words.\n"
+    "- You may place a line containing only --- between major ## sections for readability.\n"
+)
+
 SYSTEM_PROMPTS = {
-    "general": "You are DocuMind, an expert data science research assistant. Answer questions based ONLY on the provided research paper context. Cite sources by paper title and section. If the answer is not in the context, say so clearly.",
-    "compare": "You are DocuMind, a data science research analyst. Compare how the provided papers approach the topic. Structure your answer as: 1) Overview of approaches, 2) A comparison table (Method | Paper | Key Difference), 3) Summary of trade-offs. Use ONLY information from the context.",
-    "methodology": "You are DocuMind. The user wants to understand implementation details. Focus ONLY on methodology, architecture, and implementation sections in the context. List: algorithms used, model architecture, training procedure, key hyperparameters mentioned.",
-    "datasets": "You are DocuMind. Extract and list all datasets mentioned in the context. Format as a bullet list: Dataset Name — Paper Title — How it was used. If no datasets are mentioned, say so.",
-    "reproduce": "You are DocuMind. The user wants to reproduce results from these papers. List exactly: 1) Required datasets, 2) Model architecture details, 3) Key hyperparameters, 4) Evaluation metrics used, 5) Any missing details that would block reproduction. Use ONLY information from the context.",
+    "general": _GROUNDING
+    + (
+        "Write a thorough, publication-style note. Follow this ## outline in order:\n"
+        "## Executive briefing\n"
+        "4–7 bullets. Each: crisp claim + why it matters + **Paper title**.\n"
+        "## Deep synthesis\n"
+        "Several ### themed subsections (expect multiple paragraphs and nested bullet lists). "
+        "Trace mechanisms, training/eval choices, and how papers relate when the passages allow.\n"
+        "## Empirical anchors\n"
+        "If the context states numbers (accuracy, scaling, dataset sizes, loss values), list them here in a small table or bullets with **Paper title**. "
+        "If none, write *No quantitative anchors in excerpts.*\n"
+        "## Open questions & coverage limits\n"
+        "Bullets: what the user cannot conclude from these excerpts alone.\n"
+    ),
+    "compare": _GROUNDING
+    + (
+        "Produce a deep comparative analysis. Outline:\n"
+        "## At a glance\n"
+        "4–6 bullets: sharpest contrasts, shared assumptions, or ranking hints — each tied to **Paper title**.\n"
+        "## Narrative overview\n"
+        "Two short paragraphs (8–14 sentences total) weaving the story the papers support.\n"
+        "## Comparison table\n"
+        "Full GFM table. Columns: Method / paradigm | **Paper (exact title)** | Datasets / benchmarks | "
+        "Reported claim or metric | Limitation or scope | Why a practitioner would care\n"
+        "Add one row per distinct paper/method the context covers (merge duplicates).\n"
+        "## Mechanism & objective contrast\n"
+        "### Losses, objectives, inductive biases\n"
+        "### Data & evaluation protocol\n"
+        "Nested bullets; cite **Paper title** at least once per bullet cluster.\n"
+        "## Trade-offs & decision guide\n"
+        "When to pick which line of work; each bullet names papers.\n"
+        "## Single-paper fallback\n"
+        "If the corpus only supports one work, say it once, then mine that paper deeply.\n"
+    ),
+    "methodology": _GROUNDING
+    + (
+        "Extract implementation detail for someone about to code a replication. Outline:\n"
+        "## TL;DR for implementers\n"
+        "6–10 bullets covering objective, blocks/modules, optimizer, schedule hooks, regularization, batching tricks — each with **Paper title**.\n"
+        "## Architecture\n"
+        "## Training & optimization\n"
+        "## Data pipeline & preprocessing\n"
+        "## Hyperparameters & compute\n"
+        "## Failure modes called out in text\n"
+        "Use nested bullets. Missing detail → 'Not stated in excerpt.'\n"
+    ),
+    "datasets": (
+        _GROUNDING
+        + "List datasets or benchmarks using ONLY the context. "
+        "Start with ## Dataset inventory then ### At a glance (3–5 bullets summarizing coverage). "
+        "Then ### Entries as bullets: `**Dataset** — **Paper title** — usage from passage.` "
+        "If none, explain what to ingest next."
+    ),
+    "reproduce": _GROUNDING
+    + (
+        "Build a serious reproducibility blueprint. Outline:\n"
+        "## Repro snapshot\n"
+        "2–3 short paragraphs on what can be re-run vs approximated from these excerpts.\n"
+        "## Environment assumptions\n"
+        "Bullets — hardware/software only when stated; else *Not stated in excerpt.*\n"
+        "## Checklists\n"
+        "Task lists (`- [ ]`, `- [x]` only if explicitly confirmed). Subsections:\n"
+        "### Data & splits\n### Code & model artifacts\n### Training setup\n### Evaluation & metrics\n### Blockers & missing artifacts\n"
+        "Under Blockers, separate *hard* (private data, undisclosed architecture width) from *soft* (missing seed).\n"
+    ),
 }
 
 
@@ -70,21 +195,22 @@ class RAGService:
         return selected
 
     @staticmethod
+    def _usage_snippet(content: str, needle: str) -> str:
+        lower = content.lower()
+        idx = lower.find(needle.lower())
+        if idx < 0:
+            return "Evaluation or training context in the cited passage."
+        line_start = content.rfind("\n", 0, idx) + 1
+        line_end = content.find("\n", idx)
+        if line_end < 0:
+            line_end = min(len(content), idx + 220)
+        line = content[line_start:line_end].strip()
+        if len(line) > 180:
+            line = line[:177] + "..."
+        return line if line else "Evaluation or training context in the cited passage."
+
+    @staticmethod
     def _extract_datasets_from_sources(sources: list[dict]) -> list[tuple[str, str, str]]:
-        dataset_tokens = {
-            "wmt",
-            "glue",
-            "squad",
-            "multinli",
-            "coco",
-            "imagenet",
-            "cifar-10",
-            "higgs",
-            "allstate",
-            "bookscorpus",
-            "wikipedia",
-            "ieee-cis",
-        }
         results: list[tuple[str, str, str]] = []
         seen: set[tuple[str, str]] = set()
 
@@ -95,34 +221,35 @@ class RAGService:
             lower = content.lower()
 
             found: set[str] = set()
-            for token in dataset_tokens:
-                if token in lower:
-                    found.add(token)
+            for hint in sorted(KNOWN_DATASET_HINTS, key=len, reverse=True):
+                if hint in lower:
+                    found.add(hint)
 
-            # Generic pattern: "<Name> dataset" captures unseen datasets.
-            for match in re.findall(r"\b([A-Z][A-Za-z0-9\-]{2,})\s+dataset\b", content):
+            for match in re.findall(r"\b([A-Z][A-Za-z0-9\-]{2,30})\s+dataset\b", content):
                 found.add(match.lower())
-            # Generic pattern: "<descriptor> datasets" for broad mentions.
-            for match in re.findall(r"\b([A-Za-z][A-Za-z0-9\-\s]{2,40})\s+datasets\b", content):
-                cleaned = re.sub(r"\s+", " ", match.strip().lower())
-                if "benchmark" in cleaned or "nlp" in cleaned or len(cleaned.split()) <= 3:
-                    found.add(cleaned)
 
             for dataset in sorted(found):
                 key = (dataset, paper_title)
                 if key in seen:
                     continue
                 seen.add(key)
-                pretty = dataset.upper() if len(dataset) <= 5 else dataset.title()
-                usage = "mentioned in experiments/evaluation context"
+                pretty = dataset.upper() if len(dataset) <= 6 and " " not in dataset else dataset.title()
+                usage = RAGService._usage_snippet(content, dataset)
                 results.append((pretty, paper_title, usage))
 
+        results.sort(key=lambda row: (row[0].lower(), row[1].lower()))
         return results
 
     def answer(
         self, query: str, top_k: int, query_mode: str = "general", section_filter: str | None = None
     ) -> AnswerResponse:
-        results = self.embedding_service.search(query, top_k, section_filter)
+        retrieve_k = top_k
+        if query_mode in ("compare", "general"):
+            retrieve_k = min(64, max(top_k * 4, 20))
+        elif query_mode in ("datasets", "reproduce", "methodology"):
+            retrieve_k = min(56, max(top_k * 3, 16))
+
+        results = self.embedding_service.search(query, retrieve_k, section_filter)
         reranked = sorted(
             results,
             key=lambda item: item["distance"]
@@ -134,7 +261,12 @@ class RAGService:
             # Fallback keeps demo and low-volume collections usable when distance scales vary by model/index.
             filtered = reranked[: min(self.settings.FALLBACK_TOP_N, len(reranked))]
             used_fallback = True
-        filtered = self._select_diverse_sources(filtered, max_items=top_k, prefer_unique_doc=True)
+        context_slots = top_k
+        if query_mode in ("general", "compare"):
+            context_slots = min(24, top_k + 6)
+        elif query_mode in ("methodology", "reproduce"):
+            context_slots = min(22, top_k + 4)
+        filtered = self._select_diverse_sources(filtered, max_items=context_slots, prefer_unique_doc=True)
 
         if not filtered:
             return AnswerResponse(
@@ -154,12 +286,29 @@ class RAGService:
         if query_mode == "datasets":
             extracted = self._extract_datasets_from_sources(filtered)
             if extracted:
-                answer_lines = ["Datasets identified across your paper library:"]
+                unique_datasets = {row[0] for row in extracted}
+                unique_papers = {row[1] for row in extracted}
+                answer_lines = [
+                    "## Dataset inventory",
+                    f"*Library-scoped scan — **{len(unique_datasets)}** dataset labels across **{len(unique_papers)}** papers "
+                    f"({len(extracted)} mentions in retrieved chunks).*",
+                    "",
+                    "### At a glance",
+                    f"- **{len(unique_datasets)}** distinct dataset or benchmark names detected",
+                    f"- **{len(unique_papers)}** contributing papers in this answer",
+                    f"- **{len(extracted)}** total dataset–paper mention rows (sorted below)",
+                    "",
+                    "### Entries",
+                ]
                 for dataset_name, paper_title, usage in extracted:
-                    answer_lines.append(f"- {dataset_name} - {paper_title} - {usage}")
+                    answer_lines.append(f"- **{dataset_name}** — **{paper_title}** — _{usage}_")
                 answer_text = "\n".join(answer_lines)
             else:
-                answer_text = "No explicit dataset names were found in the retrieved source passages."
+                answer_text = (
+                    "## Dataset inventory\n\n"
+                    "No named datasets or benchmarks were detected in the retrieved passages. "
+                    "Try a broader **Top K**, another mode, or ingest papers whose *experiments* sections mention benchmarks."
+                )
         else:
             context_parts = []
             for i, item in enumerate(filtered):
@@ -172,11 +321,22 @@ class RAGService:
             context = "".join(context_parts)
 
             system_prompt = SYSTEM_PROMPTS.get(query_mode, SYSTEM_PROMPTS["general"])
-            user_message = f"Context from research papers:\n\n{context}\n\nQuestion: {query}"
+            user_message = (
+                f"Context from research papers:\n\n{context}\n"
+                f"Question:\n{query}\n\n"
+                "Produce the full structured answer. Be thorough where the passages allow: multi-paragraph ### sections, "
+                "nested bullets, and a rich comparison table when in compare mode. "
+                "Bold **Paper title** throughout. If a section has little evidence, keep it short and label the gap."
+            )
             messages = [{"role": "system", "content": system_prompt}, {"role": "user", "content": user_message}]
-            answer_text = self.ollama_client.chat(messages)
+            temp = 0.1
+            if query_mode in ("general", "compare"):
+                temp = 0.28
+            elif query_mode in ("methodology", "reproduce"):
+                temp = 0.16
+            answer_text = self.ollama_client.chat(messages, temperature=temp)
         if used_fallback and query_mode != "datasets":
-            answer_text = f"{answer_text}\n\nNote: best-available passages were used."
+            answer_text = f"{answer_text}\n\n*Retrieval: using best-matching passages (strict distance threshold not met).*"
 
         sources = [
             SourceCitation(

@@ -1,0 +1,15 @@
+Sequence Models for Corporate Bond Spread Changes Using Fundamental and Macro Sequences
+Fixed Income ML Note
+2020
+
+Abstract
+LSTMs and Transformers ingest quarterly fundamentals, rating actions, and curve factors to predict monthly spread changes by issuer.
+
+Methodology
+Entity embeddings combine with temporal encoders; training uses huber loss on cross-sectional panels with issuer fixed effects ablations.
+
+Datasets
+ICE BofA indices constituents 2005–2019; liquidity filters exclude distressed names below price thresholds.
+
+Results
+Transformers marginally beat LSTMs when fundamentals are dense; macro-only baselines weaker in flight-to-quality episodes.
