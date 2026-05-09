@@ -1,0 +1,15 @@
+E(3)-Equivariant Networks for Molecular Property Regression
+Geometric Deep Learning Note (synthetic)
+2022
+
+Abstract
+We build tensor field networks that respect rotations and translations on 3D atomic coordinates, predicting energy and dipole moments from conformer ensembles.
+
+Methodology
+Message passing uses relative position vectors transformed through irreducible representations; pooling is invariant to global rigid motions.
+
+Datasets
+QM9 and GEOM-Drugs subsets; train and test splits are by molecular scaffold to reduce leakage.
+
+Results
+Equivariant models outperform MLPs on coordinates alone by large margins on energy MAE; inference cost scales with neighbor count K.

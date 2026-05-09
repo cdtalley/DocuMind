@@ -1,0 +1,15 @@
+Transformer Detectors for Reading Order and Layout Region Classification in Scanned Forms
+Document AI Brief (synthetic)
+2022
+
+Abstract
+We detect text blocks, tables, and checkboxes on scanned government forms with a DETR-style detector and resolve reading order with a lightweight solver.
+
+Methodology
+Synthetic distortions for augmentation; bipartite matching loss at train time.
+
+Datasets
+Thousands of form images with polygon annotations under license.
+
+Results
+mAP improves over classical layout pipelines on skewed scans; handwritten fields remain out of distribution.

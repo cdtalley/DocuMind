@@ -1,0 +1,15 @@
+Entropic Optimal Transport for Covariate Shift Correction in Credit Scoring
+Domain Adaptation Brief (synthetic)
+2021
+
+Abstract
+We align source and target feature distributions via entropic OT maps before training logistic and tree models on labeled source data only.
+
+Methodology
+Sinkhorn iterations with stabilization; small regularization to avoid degenerate couplings.
+
+Datasets
+Vintage credit applications with time-based target shift.
+
+Results
+AUC improves on the target quarter when shift is smooth; performance collapses when macro regimes jump outside support of the map.

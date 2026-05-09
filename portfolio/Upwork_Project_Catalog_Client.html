@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="color-scheme" content="light" />
+  <title>Fixed-price project: Document RAG MVP (reference: DocuMind)</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;0,8..60,700&display=swap" rel="stylesheet" />
+  <style>
+    :root { --text: #111827; --muted: #374151; --head: #0f172a; --border: #9ca3af; --band: #1e3a8a; }
+    * { box-sizing: border-box; }
+    html { font-size: 16px; }
+    body { margin: 0; font-family: "Source Serif 4", Georgia, serif; color: var(--text); background: #e5e7eb; line-height: 1.62; }
+    main { max-width: 44rem; margin: 0 auto; background: #fff; padding: 2rem 1.75rem 3rem; box-shadow: 0 1px 3px rgba(0,0,0,.08); }
+    .banner { background: var(--band); color: #fff; margin: -2rem -1.75rem 1.5rem; padding: 1.25rem 1.75rem; font-size: 0.95rem; letter-spacing: 0.02em; }
+    h1 { font-size: 1.65rem; margin: 0 0 0.5rem; color: var(--head); line-height: 1.25; }
+    .meta { color: var(--muted); font-size: 1rem; margin-bottom: 1.25rem; }
+    h2 { font-size: 1.15rem; margin: 1.75rem 0 0.5rem; border-bottom: 2px solid var(--border); padding-bottom: 0.2rem; }
+    p, li { font-size: 1.02rem; margin: 0.55rem 0; }
+    ul, ol { padding-left: 1.3rem; }
+    table { width: 100%; border-collapse: collapse; margin: 1rem 0; font-size: 0.95rem; border: 1px solid var(--border); }
+    th, td { border: 1px solid var(--border); padding: 9px 11px; text-align: left; vertical-align: top; }
+    th { background: #f3f4f6; font-weight: 600; }
+    .price { font-size: 1.35rem; font-weight: 700; color: var(--band); margin: 0.5rem 0 0.25rem; }
+    .callout { border-left: 4px solid var(--band); padding: 12px 16px; background: #f8fafc; margin: 1rem 0; font-size: 0.98rem; }
+    code { font-family: ui-monospace, Consolas, monospace; font-size: 0.88em; background: #e5e7eb; padding: 0.1em 0.35em; border-radius: 3px; }
+    @page { size: letter; margin: 0.75in; }
+    @media print {
+      body { background: #fff; }
+      main { box-shadow: none; max-width: none; padding: 0; margin: 0; }
+      .banner { margin: 0 0 1rem; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+      h1, h2, p, li { color: #000 !important; }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <div class="banner">Upwork Project Catalog &mdash; Fixed-price offer (adapt from DocuMind-class reference implementation)</div>
+
+    <h1>Document RAG MVP: ingest, index, grounded Q&amp;A, deploy</h1>
+    <p class="meta">Single-tenant MVP suitable for internal research, policy, or technical libraries. You get a working API, operator UI, handoff docs, and two weeks of post-launch defect support.</p>
+
+    <p class="price">Recommended list price: USD 5,750 (fixed)</p>
+    <p class="meta" style="margin-top:0">Structured as three Upwork milestones (below). Alternative: <strong>USD 135/hr</strong> with a <strong>25-hour minimum</strong> if you prefer hourly with a capped discovery phase first.</p>
+
+    <div class="callout">
+      <strong>Why this number:</strong> It reflects a bounded MVP (not open-ended consulting), includes integration and one deployment target, and leaves room for you to discount slightly for your first few contracts without working below market. If the client needs SSO, multi-tenant ACLs on chunks, or formal model risk documentation, treat those as Phase 2 (see add-ons).
+    </div>
+
+    <h2>What the client receives</h2>
+    <ul>
+      <li><strong>Ingestion pipeline</strong> for agreed formats (typically PDF, DOCX, TXT) with size limits, validation, and clear error responses.</li>
+      <li><strong>Chunking + embeddings + vector store</strong> with metadata for citations (document id, section hint, page or chunk index).</li>
+      <li><strong>Retrieval layer</strong> with top-k search, optional section filter, and basic rerank / diversity so one document does not dominate answers.</li>
+      <li><strong>Generation</strong> with at least two query modes (e.g. general Q&amp;A + compare or methodology) and <strong>source cards</strong> returned with each answer.</li>
+      <li><strong>REST API</strong> (OpenAPI spec), health and readiness endpoints suitable for a reverse proxy or container orchestrator.</li>
+      <li><strong>Operator UI</strong> to upload documents, run queries, and inspect sources (framework can match client stack; reference uses Next.js + FastAPI).</li>
+      <li><strong>Deployment</strong> to one agreed environment (e.g. single VM + Docker Compose, or one managed container service).</li>
+      <li><strong>Handoff:</strong> README runbook, <code>.env.example</code>, and a 30-minute recorded walkthrough or live session (client choice).</li>
+      <li><strong>Support:</strong> 14 calendar days of bugfix support for defects reproducible on the agreed deployment (not new features).</li>
+    </ul>
+
+    <h2>Out of scope (Phase 2 unless contracted)</h2>
+    <ul>
+      <li>Per-document or per-tenant access control beyond a single shared library.</li>
+      <li>Formal legal/compliance sign-off, penetration testing, or SOC2 evidence packs.</li>
+      <li>Training or fine-tuning custom LLMs on client proprietary data.</li>
+      <li>OCR for low-quality scanned PDFs beyond a basic pass (can be scoped separately).</li>
+      <li>SLA with 24/7 on-call or sub-minute incident response.</li>
+    </ul>
+
+    <h2>Client responsibilities</h2>
+    <ul>
+      <li>Provide sample documents (or permission to use public corpus) and a single technical point of contact.</li>
+      <li>Provide or approve LLM access (API keys, VPC endpoints, or approval to run Ollama on agreed hardware).</li>
+      <li>Provide deployment target credentials or a sandbox subscription for the agreed cloud.</li>
+      <li>Review milestone deliverables within <strong>5 business days</strong> of submission.</li>
+    </ul>
+
+    <h2>Milestones (for Upwork escrow)</h2>
+    <table>
+      <thead>
+        <tr><th>#</th><th>Deliverable</th><th>Acceptance (summary)</th><th>Amount (USD)</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>1</td>
+          <td><strong>Discovery + written architecture</strong><br />Data flow, chunking strategy, API outline, risk list, revised backlog.</td>
+          <td>Client signs off written doc or provides consolidated change requests in one round.</td>
+          <td>1,150</td>
+        </tr>
+        <tr>
+          <td>2</td>
+          <td><strong>Backend + index + ingest</strong><br />Working ingest, embeddings, retrieval, query endpoint with citations on a staging URL or VM.</td>
+          <td>Ingest of agreed sample set succeeds; sample queries return answers with non-empty source list; readiness check passes.</td>
+          <td>2,450</td>
+        </tr>
+        <tr>
+          <td>3</td>
+          <td><strong>UI + deploy + handoff</strong><br />Operator UI wired to API; production or client-approved staging deploy; runbook + walkthrough.</td>
+          <td>Client can upload a new doc and query end-to-end; deployment documented; 14-day support window starts.</td>
+          <td>2,150</td>
+        </tr>
+        <tr>
+          <td colspan="3" style="text-align:right;font-weight:600">Total fixed</td>
+          <td><strong>5,750</strong></td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h2>Timeline (typical)</h2>
+    <p>Calendar <strong>3 to 4 weeks</strong> from contract start, assuming client feedback within 5 business days per milestone. Slips caused by client-side access delays extend the calendar but not the fixed price unless scope changes.</p>
+
+    <h2>Optional add-ons (fixed, after MVP)</h2>
+    <table>
+      <thead><tr><th>Add-on</th><th>Guide price (USD)</th></tr></thead>
+      <tbody>
+        <tr><td>Swap Ollama for OpenAI or Azure OpenAI + prompt hardening</td><td>1,650 - 2,400</td></tr>
+        <tr><td>Rate limiting + API key or JWT gate on all write/query routes</td><td>900 - 1,400</td></tr>
+        <tr><td>Golden-set regression tests + CI hook</td><td>1,100 - 1,800</td></tr>
+        <tr><td>Multi-tenant index + ACL filter on retrieval (design-heavy)</td><td>3,500+ (discovery required)</td></tr>
+      </tbody>
+    </table>
+
+    <h2>Communication</h2>
+    <p>Written updates twice weekly in Upwork messages; milestone submissions as fixed posts with links or attachments; urgent blockers same day when possible (US Eastern business hours).</p>
+
+    <h2>Print to PDF</h2>
+    <p>Open this file in Chrome or Edge, Ctrl+P, Save as PDF, margins Default, background graphics Off.</p>
+
+    <p class="meta" style="margin-top:2rem;"><em>Reference codebase: DocuMind (local RAG demo). Replace this footer with your public repo or private demo link when posting.</em></p>
+  </main>
+</body>
+</html>

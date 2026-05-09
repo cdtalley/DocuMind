@@ -1,0 +1,15 @@
+Post-Hoc Calibration of Tree Ensembles for Probability of Default Scores
+Risk Modeling Note (synthetic)
+2018
+
+Abstract
+We apply temperature scaling and Platt scaling on out-of-fold predictions from gradient boosted trees for PD models subject to monotonicity constraints.
+
+Methodology
+Isotonic regression where constraints allow; Brier score and reliability diagrams for monitoring.
+
+Datasets
+Retail mortgage vintages with multi-year outcomes.
+
+Results
+Expected calibration error drops materially on the test horizon; recalibration needed after macro shocks even when AUC is stable.

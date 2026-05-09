@@ -20,7 +20,7 @@ class Settings(BaseSettings):
     FALLBACK_TOP_N: int = 3
     KEYWORD_RERANK_WEIGHT: float = 0.15
     # Bump when `data/sample_docs/` changes; triggers purge + re-index of `sample_*` docs on startup.
-    SAMPLE_CORPUS_VERSION: str = "5"
+    SAMPLE_CORPUS_VERSION: str = "6"
     # Comma-separated origins. When CORS_ALLOW_ALL is true, any origin is accepted (local demos only).
     CORS_ORIGINS: str = (
         "http://127.0.0.1:3002,http://localhost:3002,"

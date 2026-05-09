@@ -1,0 +1,15 @@
+Transformer Taggers for Chemical Named Entity Recognition in Patents
+Biomedical NLP Brief (synthetic)
+2020
+
+Abstract
+We compare CRF heads vs span classifiers on BERT encoders for chemical entity spans in patent text.
+
+Methodology
+Subword alignment heuristics for span boundaries; stratified CV by technology class.
+
+Datasets
+BioCreative-style chemical mention corpora augmented with patent snippets.
+
+Results
+Span classifiers win on long compound names; inference latency doubles versus linear-chain CRF at same backbone.

@@ -1,0 +1,15 @@
+Fourier Neural Operators as Surrogates for Parametric PDE Families
+Scientific ML Summary (synthetic)
+2021
+
+Abstract
+We learn mappings from coefficient fields to solution fields for Darcy flow and Navier-Stokes snapshots with mesh-independent evaluation.
+
+Methodology
+Fourier layers in the latent grid with periodic padding; super-resolution on coarser grids at train time for robustness.
+
+Datasets
+PDE benchmark suites with varying viscosity and boundary conditions.
+
+Results
+FNOs generalize across resolutions not seen in training when boundary conditions stay in-distribution; out-of-distribution forcing breaks badly without physics priors.

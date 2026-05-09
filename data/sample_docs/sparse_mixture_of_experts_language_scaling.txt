@@ -1,0 +1,15 @@
+Sparse Mixture-of-Experts Transformers for Compute-Efficient Language Model Scaling
+Systems ML Brief (synthetic)
+2021
+
+Abstract
+We route tokens to expert feed-forward blocks with load-balancing auxiliary losses and evaluate wall-clock throughput versus dense models at matched parameter counts.
+
+Methodology
+Top-2 routing with capacity factor limits; all-to-all communication patterns optimized on TPU slices; gradient clipping and expert dropout.
+
+Datasets
+C4 and Wikipedia-derived corpora; downstream GLUE and SuperGLUE fine-tunes from frozen checkpoints.
+
+Results
+MoE models achieve lower training FLOPs per token at fixed quality but increase serving complexity; expert imbalance remains sensitive to batch size.

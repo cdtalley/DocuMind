@@ -1,0 +1,15 @@
+Hybrid BM25 and Dense Retrieval with Learned Fusion for Open-Domain QA
+IR + RAG Brief (synthetic)
+2020
+
+Abstract
+We combine lexical BM25 scores with dense retriever scores using a shallow ranker trained on click and relevance labels from enterprise search logs.
+
+Methodology
+Reciprocal rank fusion and a two-layer MLP reranker are compared; negatives mined from hard non-relevant documents.
+
+Datasets
+MS MARCO passage ranking and internal policy corpora with anonymized queries.
+
+Results
+Hybrid beats either channel alone on recall at 100; fusion weights drift when vocabulary shifts quarter to quarter without retraining.

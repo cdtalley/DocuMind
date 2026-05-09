@@ -1,0 +1,15 @@
+Spectral Embeddings and k-NN Graph Sparsification for Billion-Edge Clustering
+Graph Algorithms Note (synthetic)
+2018
+
+Abstract
+We approximate Laplacian eigenvectors via randomized range finders on sparsified k-NN graphs built from vector embeddings of entities.
+
+Methodology
+Landmark sampling for approximate nearest neighbors; normalized cuts on lower-dimensional embeddings.
+
+Datasets
+Social and transaction graphs with degree skew; evaluation uses held-out link prediction sanity checks.
+
+Results
+Runtime drops orders of magnitude versus exact spectral methods with modest community detection quality loss.

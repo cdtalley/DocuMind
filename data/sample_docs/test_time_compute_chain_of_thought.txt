@@ -1,0 +1,15 @@
+Test-Time Compute Scaling via Self-Consistency and Best-of-N Sampling
+Reasoning Systems Note (synthetic)
+2024
+
+Abstract
+We study repeated sampling with majority vote and verifier reranking on math word problems and code generation benchmarks.
+
+Methodology
+Temperature and nucleus sampling generate N candidates; a lightweight verifier scores partial correctness on unit tests for code tasks.
+
+Datasets
+GSM8K-style arithmetic sets and HumanEval-style function synthesis prompts.
+
+Results
+Accuracy grows sublinearly with N; verifier quality dominates naive self-consistency when distractors look plausible.

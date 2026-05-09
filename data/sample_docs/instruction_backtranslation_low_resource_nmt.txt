@@ -1,0 +1,15 @@
+Back-Translation with Instruction-Tuned Models for Low-Resource Machine Translation
+NMT Note (synthetic)
+2023
+
+Abstract
+We generate synthetic parallel data from monolingual target text using a multilingual instruction-tuned model and filter pairs with round-trip consistency.
+
+Methodology
+Quality estimation with COMET-style scores; vocabulary overlap filters.
+
+Datasets
+Low-resource pairs from WMT tiny tracks.
+
+Results
+BLEU gains of several points over pivot translation; hallucinated entities remain a risk for domain-specific monolingual text.

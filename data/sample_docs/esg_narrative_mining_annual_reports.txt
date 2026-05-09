@@ -1,0 +1,15 @@
+Weakly Supervised ESG Theme Detection in Annual Report Narratives
+Sustainable Finance NLP (synthetic)
+2022
+
+Abstract
+We tag paragraphs with ESG themes using seed keywords expanded through embedding neighborhoods and human validation rounds.
+
+Methodology
+Hierarchical attention over sections; abstain class for non-applicable text.
+
+Datasets
+European and US annual reports 2010-2021 with sparse theme labels.
+
+Results
+Precision on climate-related paragraphs exceeds eighty percent after two annotation rounds; greenwashing language remains a blind spot without external data.

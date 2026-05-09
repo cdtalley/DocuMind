@@ -1,0 +1,15 @@
+Gradient Boosting for Liquidity Coverage Ratio Shortfall Forecasting
+Treasury Risk Brief (synthetic)
+2019
+
+Abstract
+We forecast end-of-month LCR components using cash inflows, HQLA balances, and wholesale funding spreads with monotonic constraints on selected features.
+
+Methodology
+LightGBM with quantile objectives for tail risk; SHAP for committee-ready explanations.
+
+Datasets
+Regional bank internal treasury time series 2015-2018 with stress overlays.
+
+Results
+Quantile models outperform point forecasts for worst-week liquidity; data quality on intraday sweeps dominates model choice.

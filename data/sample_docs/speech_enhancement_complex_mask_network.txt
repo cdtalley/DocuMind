@@ -1,0 +1,15 @@
+Complex-Valued Mask Estimation Networks for Single-Channel Speech Enhancement
+Speech Processing Note (synthetic)
+2019
+
+Abstract
+We predict complex ideal ratio masks in the STFT domain with a convolutional encoder-decoder and SI-SNR loss.
+
+Methodology
+Mixed real-imaginary channel formulation; causal convolutions for streaming deployment.
+
+Datasets
+VoiceBank-DEMAND and internal telephony noise corpora.
+
+Results
+SI-SNR gains of roughly three dB over magnitude-only masks; musical noise artifacts persist under extreme SNR.

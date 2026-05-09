@@ -1,0 +1,15 @@
+KV-Cache Quantization and Page-Based Attention for Long-Context Transformer Inference
+Inference Optimization Note (synthetic)
+2024
+
+Abstract
+We quantize past key-value tensors to int8 with per-head scales and implement paged attention to reduce fragmentation on variable-length batches.
+
+Methodology
+SmoothQuant-style calibration on representative prompts; microbenchmarks on A100 and H100 GPUs.
+
+Datasets
+Synthetic long prompts up to 128k tokens and real chat transcripts truncated to policy limits.
+
+Results
+Throughput improves up to two times at 32k context with under one point perplexity regression on held-out chats.

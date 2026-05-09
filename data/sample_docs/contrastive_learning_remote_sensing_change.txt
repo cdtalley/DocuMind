@@ -1,0 +1,15 @@
+Self-Supervised Contrastive Learning for Satellite Image Change Detection
+Remote Sensing ML (synthetic)
+2023
+
+Abstract
+We learn representations from bi-temporal image pairs without pixel labels, then fine-tune a light decoder for binary change masks.
+
+Methodology
+MoCo-style queues on patch crops; augmentations respect sensor noise statistics.
+
+Datasets
+Sentinel-2 tiles over urban and forest regions with OSM-derived weak labels for evaluation only.
+
+Results
+SSL pretrain cuts labeled pixel requirements roughly in half versus random init; cloud shadows still dominate false positives.

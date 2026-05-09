@@ -3,87 +3,202 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>DocuMind — Upwork Portfolio &amp; Project Catalog</title>
+  <meta name="color-scheme" content="light" />
+  <title>DocuMind - Upwork portfolio brief</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;0,8..60,700;1,8..60,400&display=swap" rel="stylesheet" />
   <style>
-    :root { --ink: #0f172a; --muted: #475569; --accent: #2563eb; --bg: #f8fafc; }
+    /* Screen */
+    :root {
+      --text: #111827;
+      --muted: #4b5563;
+      --head: #1e3a8a;
+      --border: #9ca3af;
+      --table-head: #e5e7eb;
+    }
     * { box-sizing: border-box; }
-    body { font-family: "Segoe UI", system-ui, sans-serif; margin: 0; color: var(--ink); background: var(--bg); line-height: 1.55; font-size: 11pt; }
-    main { max-width: 720px; margin: 0 auto; padding: 28px 20px 48px; }
-    h1 { font-size: 1.75rem; margin: 0 0 6px; color: var(--accent); letter-spacing: -0.02em; }
-    .tag { color: var(--muted); font-size: 0.95rem; margin-bottom: 22px; }
-    h2 { font-size: 1.1rem; margin: 26px 0 10px; border-bottom: 2px solid #e2e8f0; padding-bottom: 4px; }
-    p, li { color: #334155; }
-    ul { padding-left: 1.2rem; }
-    table { width: 100%; border-collapse: collapse; margin: 12px 0; font-size: 0.95rem; }
-    th, td { border: 1px solid #cbd5e1; padding: 8px 10px; text-align: left; vertical-align: top; }
-    th { background: #e2e8f0; }
-    .note { background: #eff6ff; border: 1px solid #bfdbfe; padding: 12px 14px; border-radius: 8px; margin: 16px 0; font-size: 0.92rem; }
-    code { background: #e2e8f0; padding: 2px 6px; border-radius: 4px; font-size: 0.88em; }
+    html { font-size: 16px; }
+    body {
+      margin: 0;
+      padding: 0;
+      font-family: "Source Serif 4", Georgia, "Times New Roman", serif;
+      color: var(--text);
+      background: #f3f4f6;
+      line-height: 1.65;
+    }
+    main {
+      max-width: 40rem;
+      margin: 0 auto;
+      padding: 2rem 1.5rem 3rem;
+      background: #fff;
+      min-height: 100vh;
+    }
+    h1 {
+      font-size: 2rem;
+      font-weight: 700;
+      margin: 0 0 0.35rem;
+      color: var(--head);
+      line-height: 1.2;
+    }
+    .lede {
+      font-size: 1.1rem;
+      color: var(--muted);
+      margin: 0 0 1.5rem;
+      line-height: 1.5;
+    }
+    h2 {
+      font-size: 1.2rem;
+      font-weight: 600;
+      margin: 2rem 0 0.65rem;
+      padding-bottom: 0.25rem;
+      border-bottom: 2px solid var(--border);
+      color: #111827;
+      break-after: avoid;
+    }
+    p, li {
+      font-size: 1.05rem;
+      margin: 0.65rem 0;
+    }
+    ul, ol { padding-left: 1.35rem; }
+    li { margin: 0.45rem 0; }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 1rem 0;
+      font-size: 0.98rem;
+      border: 1px solid var(--border);
+    }
+    th, td {
+      border: 1px solid var(--border);
+      padding: 10px 12px;
+      text-align: left;
+      vertical-align: top;
+    }
+    th {
+      background: var(--table-head);
+      font-weight: 600;
+    }
+    .callout {
+      border: 1px solid var(--border);
+      background: #f9fafb;
+      padding: 14px 16px;
+      margin: 1.25rem 0;
+      font-size: 1rem;
+      line-height: 1.55;
+    }
+    code, kbd {
+      font-family: ui-monospace, Consolas, monospace;
+      font-size: 0.9em;
+      background: #e5e7eb;
+      padding: 0.12em 0.35em;
+      border-radius: 3px;
+    }
+    kbd { font-size: 0.85em; }
+
+    /* Print: high contrast, big type, no clipped backgrounds */
+    @page {
+      size: letter;
+      margin: 0.75in;
+    }
     @media print {
-      body { background: #fff; }
-      .note { break-inside: avoid; }
-      h2 { break-after: avoid; }
+      html { font-size: 12pt; }
+      body {
+        background: #fff !important;
+        color: #000 !important;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+      }
+      main {
+        max-width: none;
+        margin: 0;
+        padding: 0;
+        min-height: 0;
+        box-shadow: none;
+      }
+      h1 { color: #000 !important; }
+      h2 {
+        color: #000 !important;
+        border-bottom-color: #666 !important;
+        page-break-after: avoid;
+      }
+      p, li, .lede { color: #000 !important; }
+      .lede { font-size: 11pt; }
+      p, li { font-size: 11pt; }
+      table { font-size: 10pt; page-break-inside: avoid; }
+      th { background: #eee !important; }
+      .callout {
+        background: #fff !important;
+        border-color: #999 !important;
+        page-break-inside: avoid;
+      }
+      code, kbd {
+        background: #f0f0f0 !important;
+        color: #000 !important;
+      }
+      a { color: #000; text-decoration: underline; }
     }
   </style>
 </head>
 <body>
   <main>
     <h1>DocuMind</h1>
-    <p class="tag">Local-first RAG for research libraries — <strong>portfolio brief</strong> for Upwork Project Catalog &amp; portfolio items</p>
+    <p class="lede">Local-first RAG over a research library. Portfolio brief for Upwork (project catalog, attachments, or fixed-price scope notes).</p>
 
-    <div class="note">
-      <strong>Save as PDF:</strong> In Chrome or Edge, press <kbd>Ctrl</kbd>+<kbd>P</kbd> → Destination: <em>Save as PDF</em> → Save.
-      Or run <code>pip install -r scripts/portfolio_requirements.txt</code> then <code>python scripts/generate_portfolio_pdf.py</code> for <code>portfolio/DocuMind_Upwork_Catalog.pdf</code>.
+    <div class="callout">
+      <strong>Best PDF (recommended):</strong> Open this file in <strong>Chrome</strong> or <strong>Edge</strong>, then
+      <kbd>Ctrl</kbd>+<kbd>P</kbd> &rarr; Destination: <strong>Save as PDF</strong> &rarr; Margins: <strong>Default</strong>
+      &rarr; Background graphics: <strong>Off</strong> (cleaner). The script-generated PDF is a fallback; browser print usually looks better.
     </div>
 
     <h2>One-line pitch</h2>
-    <p>End-to-end <strong>retrieval-augmented Q&amp;A</strong>: ingest PDFs, Word, and text plus arXiv fetch; chunk with section-aware metadata; embed in <strong>ChromaDB</strong>; retrieve with rerank + cross-paper diversity; generate answers with <strong>mode-specific prompts</strong> and <strong>citations</strong> — <strong>FastAPI</strong> API + <strong>Next.js</strong> dashboard + <strong>Ollama</strong> (demo without cloud LLM keys).</p>
+    <p>Ingest PDFs, Word, and text; optional arXiv fetch; chunk with section-style metadata; ChromaDB vectors; retrieval with rerank and cross-paper diversity; answers from Ollama with mode-specific prompts and citations. FastAPI backend and Next.js dashboard.</p>
 
     <h2>What buyers get</h2>
     <ul>
-      <li>Grounded answers with expandable <strong>source cards</strong> (title, section, chunk, distance).</li>
+      <li>Grounded answers with source cards (title, section, chunk, distance).</li>
       <li>Modes: general Q&amp;A, compare, methodology, dataset map, reproducibility checklist.</li>
-      <li><strong>Operations:</strong> <code>/health/live</code> (liveness), <code>/health/ready</code> (readiness for traffic), <code>X-Request-ID</code> on responses, optional <code>API_KEY</code> on <code>/api/v1</code>, CORS allowlist, gzip, baseline security headers, optional JSON logs.</li>
-      <li>Production-minded API behavior: honest deletes (404), arXiv error mapping (404 vs 502 vs 504), validated query filters.</li>
+      <li>Ops: <code>/health/live</code>, <code>/health/ready</code>, <code>X-Request-ID</code>, optional <code>API_KEY</code> on <code>/api/v1</code>, CORS allowlist, gzip, security headers, optional JSON logs.</li>
+      <li>Solid API behavior: 404 on empty delete, arXiv errors mapped to sensible status codes, validated section filters.</li>
     </ul>
 
-    <h2>Tech keywords (search visibility)</h2>
-    <p>Python, FastAPI, Pydantic v2, Uvicorn, ChromaDB, LangChain text splitters, Ollama, httpx, Next.js 15, React 18, TypeScript, Docker, pytest.</p>
+    <h2>Tech keywords</h2>
+    <p>Python, FastAPI, Pydantic v2, Uvicorn, ChromaDB, LangChain, Ollama, httpx, Next.js 15, React, TypeScript, Docker, pytest.</p>
 
-    <h2>Suggested Upwork project titles</h2>
+    <h2>Sample project titles</h2>
     <ul>
-      <li><em>Fixed price:</em> “MVP: RAG over your PDFs — FastAPI + vector DB + grounded UI”</li>
-      <li><em>Hourly:</em> “Senior ML — RAG architecture, eval, and deployment on your stack”</li>
-      <li><em>Migration:</em> “Replace demo Ollama with OpenAI / Azure OpenAI — same retrieval layer”</li>
+      <li>Fixed price: MVP RAG over your PDFs (FastAPI + vector DB + grounded UI).</li>
+      <li>Hourly: RAG architecture, evaluation, deployment on your stack.</li>
+      <li>Migration: swap local Ollama for OpenAI or Azure OpenAI behind the same retrieval layer.</li>
     </ul>
 
-    <h2>Pricing table (edit brackets for your profile)</h2>
+    <h2>Pricing anchors (edit for your profile)</h2>
     <table>
       <thead>
-        <tr><th>Offering</th><th>Typical scope</th><th>Anchor (USD)</th></tr>
+        <tr><th>Offering</th><th>Scope</th><th>USD anchor</th></tr>
       </thead>
       <tbody>
-        <tr><td>Hourly</td><td>Ongoing integration, reviews, debugging</td><td>[ $95–$150 / hr ]</td></tr>
-        <tr><td>Fixed — Discovery</td><td>Architecture doc, backlog, risks, 1–2 weeks</td><td>[ $2,500–$6,000 ]</td></tr>
-        <tr><td>Fixed — MVP RAG</td><td>Ingest, index, UI, one-cloud deploy, smoke tests</td><td>[ $6,000–$14,000 ]</td></tr>
-        <tr><td>Fixed — Hardening</td><td>Auth, rate limits, tenant ACLs, formal eval — priced after discovery</td><td>[ TBD ]</td></tr>
+        <tr><td>Hourly</td><td>Integration, reviews, debugging</td><td>[ $95 - $150 / hr ]</td></tr>
+        <tr><td>Fixed - Discovery</td><td>Architecture note, backlog, risks; 1-2 weeks</td><td>[ $2,500 - $6,000 ]</td></tr>
+        <tr><td>Fixed - MVP RAG</td><td>Ingest, index, UI, one-cloud deploy, smoke tests</td><td>[ $6,000 - $14,000 ]</td></tr>
+        <tr><td>Fixed - Hardening</td><td>Auth, rate limits, tenant isolation, formal eval</td><td>[ TBD after scope ]</td></tr>
       </tbody>
     </table>
-    <p class="tag">Anchors vary by geography, reviews, and scope. Use milestones with written acceptance criteria.</p>
+    <p class="lede" style="margin-top: 0.75rem;">Anchors vary by market and your reviews. Use milestones with written acceptance criteria.</p>
 
-    <h2>5-minute demo script</h2>
+    <h2>Five-minute demo</h2>
     <ol>
-      <li>Boot stack (README: <code>start_documind.ps1</code> or Docker).</li>
-      <li>Open dashboard → run <strong>Flagship</strong> scenario → show synthesis + sources.</li>
-      <li>Open <code>/docs</code> and <code>/health/ready</code> — explain readiness vs liveness for orchestrators.</li>
-      <li>Mention optional <code>API_KEY</code> and CORS for staging/production.</li>
+      <li>Boot API + UI (see repo README: <code>start_documind.ps1</code> or Docker).</li>
+      <li>Open dashboard, run the Flagship scenario, show synthesis and sources.</li>
+      <li>Open <code>/docs</code> and <code>/health/ready</code>; explain readiness vs liveness.</li>
+      <li>Mention optional <code>API_KEY</code> and CORS for staging.</li>
     </ol>
 
-    <h2>Your links (fill in)</h2>
+    <h2>Your links</h2>
     <ul>
-      <li>Repository: <em>[ GitHub URL ]</em></li>
-      <li>Live demo: <em>[ URL or “on request” ]</em></li>
-      <li>Profile: <em>[ Upwork profile URL ]</em></li>
+      <li>Repository: [ GitHub URL ]</li>
+      <li>Live demo: [ URL or on request ]</li>
+      <li>Upwork profile: [ profile URL ]</li>
     </ul>
   </main>
 </body>

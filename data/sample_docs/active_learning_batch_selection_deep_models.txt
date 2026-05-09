@@ -1,0 +1,15 @@
+Batch Mode Active Learning with Diversity for Deep Image Classifiers
+Active Learning Brief (synthetic)
+2019
+
+Abstract
+We select labeling batches using uncertainty scores tempered with k-means++ diversity in embedding space to avoid redundant images.
+
+Methodology
+Core-set approximations compared to BADGE embeddings from penultimate layer features.
+
+Datasets
+CIFAR-100 and internal defect inspection imagery.
+
+Results
+Label budget to reach target accuracy drops twenty to thirty percent versus naive uncertainty sampling; batch size interacts strongly with diversity gains.

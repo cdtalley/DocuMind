@@ -1,0 +1,15 @@
+Transformer Encoders for Material Adverse Change Clause Classification
+Legal NLP Brief (synthetic)
+2021
+
+Abstract
+We classify MAC clauses in merger agreements into standard vs highly negotiated language using span-level annotations from paralegal review.
+
+Methodology
+Longformer windows with sliding overlap; class imbalance handled with weighted loss.
+
+Datasets
+Hundreds of agreements under attorney-client redaction patterns.
+
+Results
+Macro-F1 improves over bag-of-words baselines; errors cluster on cross-border definitions referencing foreign statutes.

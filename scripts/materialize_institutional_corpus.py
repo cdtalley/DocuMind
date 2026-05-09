@@ -484,6 +484,406 @@ Results
 Active-active cuts failover time below one minute when object storage replication lags are bounded; cost tradeoffs favor regional pairs over triple-active.
 """,
     ),
+    # --- v6 expansion: additional ML + applied briefs (synthetic, for retrieval stress) ---
+    (
+        "protein_language_models_structure_prediction.txt",
+        """Protein Language Models for Secondary Structure and Contact Prediction
+Structure Bioinformatics Brief (synthetic)
+2023
+
+Abstract
+We fine-tune large protein language models on residue sequences with auxiliary heads for DSSP-derived labels and distogram-based contact maps, comparing frozen-backbone adapters to full fine-tunes.
+
+Methodology
+Training uses crop windows of 512 residues with paired MSA dropout; losses combine cross-entropy for secondary structure and binary cross-entropy on top-L contact pairs.
+
+Datasets
+CASP14 targets and PDB chains filtered to 40 percent identity clusters; evaluation reports Q8 accuracy and long-range precision on L over 24.
+
+Results
+Adapter-only training reaches within one point Q8 of full fine-tune at four times lower GPU hours; calibration on rare amino acid contexts remains the main failure mode.
+""",
+    ),
+    (
+        "equivariant_neural_networks_3d_molecules.txt",
+        """E(3)-Equivariant Networks for Molecular Property Regression
+Geometric Deep Learning Note (synthetic)
+2022
+
+Abstract
+We build tensor field networks that respect rotations and translations on 3D atomic coordinates, predicting energy and dipole moments from conformer ensembles.
+
+Methodology
+Message passing uses relative position vectors transformed through irreducible representations; pooling is invariant to global rigid motions.
+
+Datasets
+QM9 and GEOM-Drugs subsets; train and test splits are by molecular scaffold to reduce leakage.
+
+Results
+Equivariant models outperform MLPs on coordinates alone by large margins on energy MAE; inference cost scales with neighbor count K.
+""",
+    ),
+    (
+        "diffusion_models_text_conditional_image.txt",
+        """Classifier-Free Guidance for Text-Conditional Image Diffusion at Scale
+Generative Modeling Summary (synthetic)
+2022
+
+Abstract
+We train latent diffusion models with cross-attention to CLIP text embeddings and study guidance scale tradeoffs between fidelity and diversity.
+
+Methodology
+U-Net backbones operate in a VAE latent space; training drops classifier labels for a portion of steps to enable guidance at sampling time.
+
+Datasets
+LAION subsets and internal captioned photo data; human ratings on a 1-5 alignment rubric.
+
+Results
+Guidance above seven sharpens text alignment but collapses diversity; dynamic thresholding stabilizes sampling at high guidance.
+""",
+    ),
+    (
+        "sparse_mixture_of_experts_language_scaling.txt",
+        """Sparse Mixture-of-Experts Transformers for Compute-Efficient Language Model Scaling
+Systems ML Brief (synthetic)
+2021
+
+Abstract
+We route tokens to expert feed-forward blocks with load-balancing auxiliary losses and evaluate wall-clock throughput versus dense models at matched parameter counts.
+
+Methodology
+Top-2 routing with capacity factor limits; all-to-all communication patterns optimized on TPU slices; gradient clipping and expert dropout.
+
+Datasets
+C4 and Wikipedia-derived corpora; downstream GLUE and SuperGLUE fine-tunes from frozen checkpoints.
+
+Results
+MoE models achieve lower training FLOPs per token at fixed quality but increase serving complexity; expert imbalance remains sensitive to batch size.
+""",
+    ),
+    (
+        "test_time_compute_chain_of_thought.txt",
+        """Test-Time Compute Scaling via Self-Consistency and Best-of-N Sampling
+Reasoning Systems Note (synthetic)
+2024
+
+Abstract
+We study repeated sampling with majority vote and verifier reranking on math word problems and code generation benchmarks.
+
+Methodology
+Temperature and nucleus sampling generate N candidates; a lightweight verifier scores partial correctness on unit tests for code tasks.
+
+Datasets
+GSM8K-style arithmetic sets and HumanEval-style function synthesis prompts.
+
+Results
+Accuracy grows sublinearly with N; verifier quality dominates naive self-consistency when distractors look plausible.
+""",
+    ),
+    (
+        "neural_operators_pde_surrogates.txt",
+        """Fourier Neural Operators as Surrogates for Parametric PDE Families
+Scientific ML Summary (synthetic)
+2021
+
+Abstract
+We learn mappings from coefficient fields to solution fields for Darcy flow and Navier-Stokes snapshots with mesh-independent evaluation.
+
+Methodology
+Fourier layers in the latent grid with periodic padding; super-resolution on coarser grids at train time for robustness.
+
+Datasets
+PDE benchmark suites with varying viscosity and boundary conditions.
+
+Results
+FNOs generalize across resolutions not seen in training when boundary conditions stay in-distribution; out-of-distribution forcing breaks badly without physics priors.
+""",
+    ),
+    (
+        "hybrid_retrieval_bm25_dense_fusion.txt",
+        """Hybrid BM25 and Dense Retrieval with Learned Fusion for Open-Domain QA
+IR + RAG Brief (synthetic)
+2020
+
+Abstract
+We combine lexical BM25 scores with dense retriever scores using a shallow ranker trained on click and relevance labels from enterprise search logs.
+
+Methodology
+Reciprocal rank fusion and a two-layer MLP reranker are compared; negatives mined from hard non-relevant documents.
+
+Datasets
+MS MARCO passage ranking and internal policy corpora with anonymized queries.
+
+Results
+Hybrid beats either channel alone on recall at 100; fusion weights drift when vocabulary shifts quarter to quarter without retraining.
+""",
+    ),
+    (
+        "kv_cache_optimization_long_context_inference.txt",
+        """KV-Cache Quantization and Page-Based Attention for Long-Context Transformer Inference
+Inference Optimization Note (synthetic)
+2024
+
+Abstract
+We quantize past key-value tensors to int8 with per-head scales and implement paged attention to reduce fragmentation on variable-length batches.
+
+Methodology
+SmoothQuant-style calibration on representative prompts; microbenchmarks on A100 and H100 GPUs.
+
+Datasets
+Synthetic long prompts up to 128k tokens and real chat transcripts truncated to policy limits.
+
+Results
+Throughput improves up to two times at 32k context with under one point perplexity regression on held-out chats.
+""",
+    ),
+    (
+        "trade_surveillance_sequence_transformers.txt",
+        """Sequence Transformers for Suspicious Order Pattern Detection in Equities Markets
+Market Surveillance ML (synthetic)
+2021
+
+Abstract
+We encode time-ordered order events with self-attention and contrast against hand-crafted rule alerts for escalation triage.
+
+Methodology
+Embeddings for order types, sizes, and resting time gaps; focal loss for rare positive alerts.
+
+Datasets
+Labeled alert outcomes from internal surveillance teams on US equities tape replays.
+
+Results
+Model reduces false escalations by a double-digit percent at fixed review budget; regulatory explainability requires attention rollout visualizations for auditors.
+""",
+    ),
+    (
+        "liquidity_coverage_ratio_forecasting_ml.txt",
+        """Gradient Boosting for Liquidity Coverage Ratio Shortfall Forecasting
+Treasury Risk Brief (synthetic)
+2019
+
+Abstract
+We forecast end-of-month LCR components using cash inflows, HQLA balances, and wholesale funding spreads with monotonic constraints on selected features.
+
+Methodology
+LightGBM with quantile objectives for tail risk; SHAP for committee-ready explanations.
+
+Datasets
+Regional bank internal treasury time series 2015-2018 with stress overlays.
+
+Results
+Quantile models outperform point forecasts for worst-week liquidity; data quality on intraday sweeps dominates model choice.
+""",
+    ),
+    (
+        "esg_narrative_mining_annual_reports.txt",
+        """Weakly Supervised ESG Theme Detection in Annual Report Narratives
+Sustainable Finance NLP (synthetic)
+2022
+
+Abstract
+We tag paragraphs with ESG themes using seed keywords expanded through embedding neighborhoods and human validation rounds.
+
+Methodology
+Hierarchical attention over sections; abstain class for non-applicable text.
+
+Datasets
+European and US annual reports 2010-2021 with sparse theme labels.
+
+Results
+Precision on climate-related paragraphs exceeds eighty percent after two annotation rounds; greenwashing language remains a blind spot without external data.
+""",
+    ),
+    (
+        "legal_clause_classification_transformers.txt",
+        """Transformer Encoders for Material Adverse Change Clause Classification
+Legal NLP Brief (synthetic)
+2021
+
+Abstract
+We classify MAC clauses in merger agreements into standard vs highly negotiated language using span-level annotations from paralegal review.
+
+Methodology
+Longformer windows with sliding overlap; class imbalance handled with weighted loss.
+
+Datasets
+Hundreds of agreements under attorney-client redaction patterns.
+
+Results
+Macro-F1 improves over bag-of-words baselines; errors cluster on cross-border definitions referencing foreign statutes.
+""",
+    ),
+    (
+        "contrastive_learning_remote_sensing_change.txt",
+        """Self-Supervised Contrastive Learning for Satellite Image Change Detection
+Remote Sensing ML (synthetic)
+2023
+
+Abstract
+We learn representations from bi-temporal image pairs without pixel labels, then fine-tune a light decoder for binary change masks.
+
+Methodology
+MoCo-style queues on patch crops; augmentations respect sensor noise statistics.
+
+Datasets
+Sentinel-2 tiles over urban and forest regions with OSM-derived weak labels for evaluation only.
+
+Results
+SSL pretrain cuts labeled pixel requirements roughly in half versus random init; cloud shadows still dominate false positives.
+""",
+    ),
+    (
+        "spectral_clustering_large_graph_embeddings.txt",
+        """Spectral Embeddings and k-NN Graph Sparsification for Billion-Edge Clustering
+Graph Algorithms Note (synthetic)
+2018
+
+Abstract
+We approximate Laplacian eigenvectors via randomized range finders on sparsified k-NN graphs built from vector embeddings of entities.
+
+Methodology
+Landmark sampling for approximate nearest neighbors; normalized cuts on lower-dimensional embeddings.
+
+Datasets
+Social and transaction graphs with degree skew; evaluation uses held-out link prediction sanity checks.
+
+Results
+Runtime drops orders of magnitude versus exact spectral methods with modest community detection quality loss.
+""",
+    ),
+    (
+        "biocreative_ner_transformers_chemical.txt",
+        """Transformer Taggers for Chemical Named Entity Recognition in Patents
+Biomedical NLP Brief (synthetic)
+2020
+
+Abstract
+We compare CRF heads vs span classifiers on BERT encoders for chemical entity spans in patent text.
+
+Methodology
+Subword alignment heuristics for span boundaries; stratified CV by technology class.
+
+Datasets
+BioCreative-style chemical mention corpora augmented with patent snippets.
+
+Results
+Span classifiers win on long compound names; inference latency doubles versus linear-chain CRF at same backbone.
+""",
+    ),
+    (
+        "speech_enhancement_complex_mask_network.txt",
+        """Complex-Valued Mask Estimation Networks for Single-Channel Speech Enhancement
+Speech Processing Note (synthetic)
+2019
+
+Abstract
+We predict complex ideal ratio masks in the STFT domain with a convolutional encoder-decoder and SI-SNR loss.
+
+Methodology
+Mixed real-imaginary channel formulation; causal convolutions for streaming deployment.
+
+Datasets
+VoiceBank-DEMAND and internal telephony noise corpora.
+
+Results
+SI-SNR gains of roughly three dB over magnitude-only masks; musical noise artifacts persist under extreme SNR.
+""",
+    ),
+    (
+        "optimal_transport_domain_adaptation_tabular.txt",
+        """Entropic Optimal Transport for Covariate Shift Correction in Credit Scoring
+Domain Adaptation Brief (synthetic)
+2021
+
+Abstract
+We align source and target feature distributions via entropic OT maps before training logistic and tree models on labeled source data only.
+
+Methodology
+Sinkhorn iterations with stabilization; small regularization to avoid degenerate couplings.
+
+Datasets
+Vintage credit applications with time-based target shift.
+
+Results
+AUC improves on the target quarter when shift is smooth; performance collapses when macro regimes jump outside support of the map.
+""",
+    ),
+    (
+        "instruction_backtranslation_low_resource_nmt.txt",
+        """Back-Translation with Instruction-Tuned Models for Low-Resource Machine Translation
+NMT Note (synthetic)
+2023
+
+Abstract
+We generate synthetic parallel data from monolingual target text using a multilingual instruction-tuned model and filter pairs with round-trip consistency.
+
+Methodology
+Quality estimation with COMET-style scores; vocabulary overlap filters.
+
+Datasets
+Low-resource pairs from WMT tiny tracks.
+
+Results
+BLEU gains of several points over pivot translation; hallucinated entities remain a risk for domain-specific monolingual text.
+""",
+    ),
+    (
+        "document_layout_detection_transformers.txt",
+        """Transformer Detectors for Reading Order and Layout Region Classification in Scanned Forms
+Document AI Brief (synthetic)
+2022
+
+Abstract
+We detect text blocks, tables, and checkboxes on scanned government forms with a DETR-style detector and resolve reading order with a lightweight solver.
+
+Methodology
+Synthetic distortions for augmentation; bipartite matching loss at train time.
+
+Datasets
+Thousands of form images with polygon annotations under license.
+
+Results
+mAP improves over classical layout pipelines on skewed scans; handwritten fields remain out of distribution.
+""",
+    ),
+    (
+        "calibration_temperature_platt_scaling_credit.txt",
+        """Post-Hoc Calibration of Tree Ensembles for Probability of Default Scores
+Risk Modeling Note (synthetic)
+2018
+
+Abstract
+We apply temperature scaling and Platt scaling on out-of-fold predictions from gradient boosted trees for PD models subject to monotonicity constraints.
+
+Methodology
+Isotonic regression where constraints allow; Brier score and reliability diagrams for monitoring.
+
+Datasets
+Retail mortgage vintages with multi-year outcomes.
+
+Results
+Expected calibration error drops materially on the test horizon; recalibration needed after macro shocks even when AUC is stable.
+""",
+    ),
+    (
+        "active_learning_batch_selection_deep_models.txt",
+        """Batch Mode Active Learning with Diversity for Deep Image Classifiers
+Active Learning Brief (synthetic)
+2019
+
+Abstract
+We select labeling batches using uncertainty scores tempered with k-means++ diversity in embedding space to avoid redundant images.
+
+Methodology
+Core-set approximations compared to BADGE embeddings from penultimate layer features.
+
+Datasets
+CIFAR-100 and internal defect inspection imagery.
+
+Results
+Label budget to reach target accuracy drops twenty to thirty percent versus naive uncertainty sampling; batch size interacts strongly with diversity gains.
+""",
+    ),
 ]
 
 

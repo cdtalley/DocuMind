@@ -1,0 +1,15 @@
+Protein Language Models for Secondary Structure and Contact Prediction
+Structure Bioinformatics Brief (synthetic)
+2023
+
+Abstract
+We fine-tune large protein language models on residue sequences with auxiliary heads for DSSP-derived labels and distogram-based contact maps, comparing frozen-backbone adapters to full fine-tunes.
+
+Methodology
+Training uses crop windows of 512 residues with paired MSA dropout; losses combine cross-entropy for secondary structure and binary cross-entropy on top-L contact pairs.
+
+Datasets
+CASP14 targets and PDB chains filtered to 40 percent identity clusters; evaluation reports Q8 accuracy and long-range precision on L over 24.
+
+Results
+Adapter-only training reaches within one point Q8 of full fine-tune at four times lower GPU hours; calibration on rare amino acid contexts remains the main failure mode.

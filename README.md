@@ -32,7 +32,7 @@ My reading pile is always half PDFs and half “I’ll come back to this.” Whe
 
 Ingest `.pdf`, `.docx`, `.txt`. Fetch from arXiv by ID. Query in five modes: `general`, `compare`, `methodology`, `datasets`, `reproduce`. Optional section filter. List papers, fetch one, delete. Collection stats endpoint.
 
-Bundled text “papers” live under `data/sample_docs/`—40‑ish summaries spanning core ML topics plus a bunch of finance‑ and ops‑flavored briefs I added so retrieval isn’t trivial on a two‑document toy set. They index as `sample_*` doc ids. If you change `SAMPLE_CORPUS_VERSION` in settings, startup purges those sample rows and re‑ingests (Ollama has to be up).
+Bundled text “papers” live under `data/sample_docs/`—60-plus summaries spanning core ML, vision/NLP/scientific ML, plus finance- and ops-flavored briefs so retrieval isn’t trivial on a toy set. They index as `sample_*` doc ids. If you change `SAMPLE_CORPUS_VERSION` in settings, startup purges those sample rows and re‑ingests (Ollama has to be up).
 
 To grow the library for real: `scripts/bulk_ingest_arxiv.py` with `data/arxiv_seed_list.txt` (I throttle between requests so I’m not hammering arXiv).
 
@@ -55,10 +55,11 @@ If I’m talking about production RAG in an interview, I point to specifics: how
 
 ## Upwork / portfolio
 
-I keep a one‑pager for proposals:
+I keep proposal collateral under `portfolio/`:
 
-- `portfolio/DocuMind_Upwork_Catalog.html` — open in a browser, print to PDF if I want to tweak layout.
-- `portfolio/DocuMind_Upwork_Catalog.pdf` — regenerate with `pip install -r scripts/portfolio_requirements.txt` then `python scripts/generate_portfolio_pdf.py`.
+- **`portfolio/Upwork_Project_Catalog_Client.html`** — client-style **fixed-price catalog**: scope, milestones, acceptance checks, **USD 5,750** recommendation, hourly alternative, add-ons. Print to PDF from Chrome/Edge for attachments.
+- **`portfolio/DocuMind_Upwork_Catalog.html`** — shorter portfolio brief (pitch + tech keywords). Same print workflow.
+- **`portfolio/DocuMind_Upwork_Catalog.pdf`** — optional CLI build: `pip install -r scripts/portfolio_requirements.txt` then `python scripts/generate_portfolio_pdf.py`. Browser print from HTML usually looks better.
 
 ---
 

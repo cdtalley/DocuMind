@@ -1,0 +1,15 @@
+Sequence Transformers for Suspicious Order Pattern Detection in Equities Markets
+Market Surveillance ML (synthetic)
+2021
+
+Abstract
+We encode time-ordered order events with self-attention and contrast against hand-crafted rule alerts for escalation triage.
+
+Methodology
+Embeddings for order types, sizes, and resting time gaps; focal loss for rare positive alerts.
+
+Datasets
+Labeled alert outcomes from internal surveillance teams on US equities tape replays.
+
+Results
+Model reduces false escalations by a double-digit percent at fixed review budget; regulatory explainability requires attention rollout visualizations for auditors.

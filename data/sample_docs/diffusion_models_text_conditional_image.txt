@@ -1,0 +1,15 @@
+Classifier-Free Guidance for Text-Conditional Image Diffusion at Scale
+Generative Modeling Summary (synthetic)
+2022
+
+Abstract
+We train latent diffusion models with cross-attention to CLIP text embeddings and study guidance scale tradeoffs between fidelity and diversity.
+
+Methodology
+U-Net backbones operate in a VAE latent space; training drops classifier labels for a portion of steps to enable guidance at sampling time.
+
+Datasets
+LAION subsets and internal captioned photo data; human ratings on a 1-5 alignment rubric.
+
+Results
+Guidance above seven sharpens text alignment but collapses diversity; dynamic thresholding stabilizes sampling at high guidance.
