@@ -162,6 +162,39 @@
       <li>Solid API behavior: 404 on empty delete, arXiv errors mapped to sensible status codes, validated section filters.</li>
     </ul>
 
+    <h2>Standing out from &ldquo;top example&rdquo; RAG portfolios</h2>
+    <p>High-visibility public examples skew toward <strong>tutorial-complete</strong>, not <strong>procurement-complete</strong>. The same stacks appear in job posts: LangChain or LlamaIndex orchestration, Pinecone/FAISS/Weaviate, GPT-4 or Gemini, Streamlit or a thin Next wrapper. That is table stakes. DocuMind is positioned where serious clients look next: <strong>operability, retrieval discipline, and explicit acceptance hooks</strong>.</p>
+    <table>
+      <thead>
+        <tr><th>Crowded pattern</th><th>Typical portfolio signal</th><th>DocuMind signal</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Chat-with-PDF repos (many GitHub &ldquo;RAG-PDF&rdquo; / ChatPDF variants)</td>
+          <td>Single chain, one UI page, cloud keys assumed.</td>
+          <td>REST contract, optional <strong>local Ollama</strong> path for zero recurring inference cost in demos, bulk paths (directory ingest, arXiv list).</td>
+        </tr>
+        <tr>
+          <td>Notebook or Colab-only deliverable</td>
+          <td>Works on author machine; unclear production boundary.</td>
+          <td>FastAPI lifespan wiring, pytest, Docker story in README; dashboard screenshot under <code>portfolio/screenshots/</code> for attachments.</td>
+        </tr>
+        <tr>
+          <td>Generic &ldquo;citations enabled&rdquo;</td>
+          <td>Sources sometimes irrelevant or from one doc only.</td>
+          <td>Cross-paper diversity + rerank language; multiple <strong>task-shaped</strong> prompts (compare, methodology, datasets, reproduce).</td>
+        </tr>
+        <tr>
+          <td>Health check = <code>200 OK</code> on root</td>
+          <td>Orchestrator cannot tell if embeddings are actually usable.</td>
+          <td><code>/health/live</code> vs <code>/health/ready</code> split; aligns with how you answer infra interview questions, not only demo questions.</td>
+        </tr>
+      </tbody>
+    </table>
+    <div class="callout">
+      <strong>How to use this in proposals:</strong> Name the archetype the client is trying to avoid (single-PDF toy, opaque agents, no deploy story), then point to <strong>one metric and one artifact</strong> (for example: readiness endpoint passes on staging; milestone 2 acceptance table from <code>Upwork_Project_Catalog_Client.html</code>). That pattern wins against generic stack dumps.
+    </div>
+
     <h2>Tech keywords</h2>
     <p>Python, FastAPI, Pydantic v2, Uvicorn, ChromaDB, LangChain, Ollama, httpx, Next.js 15, React, TypeScript, Docker, pytest.</p>
 

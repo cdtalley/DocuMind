@@ -58,7 +58,7 @@ If I’m talking about production RAG in an interview, I point to specifics: how
 I keep proposal collateral under `portfolio/`:
 
 - **`portfolio/screenshots/documind-dashboard.png`** — full-page capture of the Next.js dashboard (API + web running locally). Regenerate with Playwright after `.\start_documind.ps1` (or uvicorn + `npx next dev -p 3002`): `npx playwright@1.50.0 screenshot "http://127.0.0.1:3002/" portfolio/screenshots/documind-dashboard.png --viewport-size="1440,900" --wait-for-timeout=20000 --full-page`.
-- **`portfolio/Upwork_Project_Catalog_Client.html`** — client-style **fixed-price catalog**: scope, milestones, acceptance checks, **USD 5,750** recommendation, hourly alternative, add-ons. Print to PDF from Chrome/Edge for attachments.
+- **`portfolio/Upwork_Project_Catalog_Client.html`** — client-style **fixed-price catalog**: scope, milestones, acceptance checks, **USD 5,750** recommendation, hourly alternative, add-ons, plus a **market-context** section (typical Chat-PDF / Streamlit / cloud-only / agent / search-only archetypes vs this scope). Print to PDF from Chrome/Edge for attachments.
 - **`portfolio/DocuMind_Upwork_Catalog.html`** — shorter portfolio brief (pitch + tech keywords). Same print workflow.
 - **`portfolio/DocuMind_Upwork_Catalog.pdf`** — optional CLI build: `pip install -r scripts/portfolio_requirements.txt` then `python scripts/generate_portfolio_pdf.py`. Browser print from HTML usually looks better.
 

@@ -49,6 +49,51 @@
       <strong>Why this number:</strong> It reflects a bounded MVP (not open-ended consulting), includes integration and one deployment target, and leaves room for you to discount slightly for your first few contracts without working below market. If the client needs SSO, multi-tenant ACLs on chunks, or formal model risk documentation, treat those as Phase 2 (see add-ons).
     </div>
 
+    <h2>Market context: what &ldquo;RAG MVP&rdquo; usually means on talent marketplaces</h2>
+    <p>Clients comparing proposals see the same shapes repeatedly. None of these are &ldquo;wrong,&rdquo; but they solve different problems than a serious internal library tool. This catalog is written so your scope reads as <strong>operator-grade</strong>, not a weekend tutorial fork.</p>
+    <table>
+      <thead>
+        <tr><th>Common archetype</th><th>What it typically delivers</th><th>Where it often stops</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>Chat-with-PDF / single-notebook RAG</strong></td>
+          <td>Upload one PDF, ask questions in a chain; OpenAI + Pinecone or FAISS; citations as an afterthought.</td>
+          <td>No durable API contract, no readiness checks, weak bulk ingest, one generic prompt, little cross-document behavior.</td>
+        </tr>
+        <tr>
+          <td><strong>Streamlit-only UI</strong></td>
+          <td>Fast POC for a solo analyst; good for iteration.</td>
+          <td>Harder handoff for product/engineering teams; limited layout for ops workflows and dashboards.</td>
+        </tr>
+        <tr>
+          <td><strong>Cloud-only stack (managed vectors + hosted LLM)</strong></td>
+          <td>Lowest friction first demo.</td>
+          <td>Data residency and unit economics may disqualify regulated or IP-heavy libraries unless redesigned.</td>
+        </tr>
+        <tr>
+          <td><strong>Agent demos (many tools, thin retrieval)</strong></td>
+          <td>Impressive transcripts on cherry-picked threads.</td>
+          <td>Opaque failure modes; retrieval quality and citation discipline often underspecified in acceptance criteria.</td>
+        </tr>
+        <tr>
+          <td><strong>Vector search SKU</strong></td>
+          <td>Semantic search endpoint only.</td>
+          <td>No grounded generation contract, no query modes, no operator story for ingest and review.</td>
+        </tr>
+      </tbody>
+    </table>
+    <p class="meta">Public repos in the &ldquo;ChatPDF + LangChain + vector DB&rdquo; shape (for example <em>ChatPDF-RAG</em>, <em>AskMyPDF-GPT4</em>, <em>RAG-PDF</em> on GitHub) illustrate how common the pattern is: easy to clone, hard to defend in procurement without the rows above addressed.</p>
+
+    <h2>What makes <em>this</em> catalog stand out for buyers</h2>
+    <ul>
+      <li><strong>Written acceptance criteria per milestone</strong> (ingest success, non-empty citations, readiness check) so escrow maps to evidence, not vibes.</li>
+      <li><strong>Dual health model</strong> (liveness vs readiness) aligned with how platform teams deploy behind proxies.</li>
+      <li><strong>Retrieval behavior spelled in</strong> (top-k, optional section filter, rerank / diversity) so one paper cannot dominate context&mdash;a frequent failure in generic RAG demos.</li>
+      <li><strong>Multiple grounded query modes</strong> (not only Q&amp;A): comparison, methodology, structured dataset hints, reproducibility-style checklist&mdash;signals research-adjacent use, not a single chat box.</li>
+      <li><strong>Deployment + runbook + bounded support</strong> treats the handoff as part of the product, which differentiates from &ldquo;here is my Colab link.&rdquo;</li>
+    </ul>
+
     <h2>What the client receives</h2>
     <ul>
       <li><strong>Ingestion pipeline</strong> for agreed formats (typically PDF, DOCX, TXT) with size limits, validation, and clear error responses.</li>
