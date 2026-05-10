@@ -1,6 +1,6 @@
 import "./globals.css";
 import type { Metadata } from "next";
-import { DM_Sans } from "next/font/google";
+import { DM_Sans, Outfit } from "next/font/google";
 
 const dmSans = DM_Sans({
   subsets: ["latin"],
@@ -8,16 +8,22 @@ const dmSans = DM_Sans({
   display: "swap"
 });
 
+const outfit = Outfit({
+  subsets: ["latin"],
+  variable: "--font-outfit",
+  display: "swap"
+});
+
 export const metadata: Metadata = {
-  title: "DocuMind · Enterprise research RAG",
+  title: "DocuMind · RAG over a document library",
   description:
-    "Local-first retrieval-augmented generation over your paper library: ChromaDB vectors, Ollama LLMs, FastAPI services, citation-backed answers, and audit-oriented query modes."
+    "FastAPI + ChromaDB + Ollama: ingest PDF/DOCX/TXT, optional arXiv fetch, vector search, mode-specific prompts, citations, optional FLARE-style second retrieval. Next.js dashboard."
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
-      <body className={`${dmSans.variable} ${dmSans.className}`}>{children}</body>
+      <body className={`${dmSans.variable} ${outfit.variable} ${dmSans.className}`}>{children}</body>
     </html>
   );
 }

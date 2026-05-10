@@ -2,6 +2,7 @@ param(
     [string]$ApiHost = "127.0.0.1",
     [int]$ApiPort = 8001,
     [int]$WebPort = 3002,
+    [int]$MaxApiWaitMinutes = 180,
     [switch]$SkipModelPull
 )
 
@@ -52,6 +53,15 @@ function Ensure-Model([string]$ModelName) {
 
 Push-Location $PSScriptRoot
 try {
+    $pythonExe = if (Test-Path (Join-Path $PSScriptRoot ".venv\Scripts\python.exe")) {
+        (Join-Path $PSScriptRoot ".venv\Scripts\python.exe")
+    } else {
+        "python"
+    }
+    if ($pythonExe -ne "python") {
+        Write-Host "[start] Using virtualenv Python: $pythonExe"
+    }
+
     Ensure-OllamaRunning
 
     if (-not $SkipModelPull) {
@@ -60,24 +70,32 @@ try {
     }
 
     Write-Host "[start] Launching API on http://$ApiHost`:$ApiPort ..."
-    Start-Process -FilePath "python" -ArgumentList @(
+    Write-Host "[info] First boot can block on sample corpus ingest for a long time; waiting up to $MaxApiWaitMinutes min for /health ..."
+    Start-Process -FilePath $pythonExe -ArgumentList @(
         "-m", "uvicorn", "app.main:app", "--host", $ApiHost, "--port", $ApiPort.ToString(), "--reload"
     ) -WorkingDirectory $PSScriptRoot -WindowStyle Minimized | Out-Null
 
     $apiReady = $false
-    for ($i = 0; $i -lt 40; $i++) {
-        Start-Sleep -Milliseconds 500
+    $deadline = (Get-Date).AddMinutes($MaxApiWaitMinutes)
+    $lastProgress = [datetime]::MinValue
+    while ((Get-Date) -lt $deadline) {
+        Start-Sleep -Seconds 5
         try {
-            $health = Invoke-RestMethod -Uri "http://$ApiHost`:$ApiPort/health" -Method Get -TimeoutSec 3
+            $health = Invoke-RestMethod -Uri "http://$ApiHost`:$ApiPort/health" -Method Get -TimeoutSec 10
             if ($health.status) {
                 $apiReady = $true
                 break
             }
         } catch {
         }
+        if (((Get-Date) - $lastProgress).TotalSeconds -ge 60) {
+            $remaining = [math]::Max(0, [int]($deadline - (Get-Date)).TotalMinutes)
+            Write-Host "[wait] API not ready yet (ingest may still be running). ~$remaining min left before timeout."
+            $lastProgress = Get-Date
+        }
     }
     if (-not $apiReady) {
-        throw "API failed readiness check at http://$ApiHost`:$ApiPort/health"
+        throw "API failed readiness check at http://$ApiHost`:$ApiPort/health within $MaxApiWaitMinutes minutes. Extend with -MaxApiWaitMinutes or check the minimized uvicorn window for errors."
     }
     Write-Host "[ok] API is ready."
 
@@ -101,7 +119,7 @@ try {
     Write-Host "  - Backend : http://$ApiHost`:$ApiPort"
     Write-Host "  - API Docs: http://$ApiHost`:$ApiPort/docs"
     Write-Host ""
-    Write-Host "Tip: run with -SkipModelPull for faster repeated boots."
+    Write-Host "Tip: run with -SkipModelPull for faster repeated boots; use -MaxApiWaitMinutes to allow longer first-boot ingest."
 } finally {
     Pop-Location
 }

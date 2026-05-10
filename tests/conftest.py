@@ -86,6 +86,8 @@ class FakeRagService:
                 query_mode=query_mode,
                 model_used="llama3",
                 chunks_searched=0,
+                flare_enabled=use_flare,
+                flare_followup_retrieval=False,
             )
         first = results[0]
         return AnswerResponse(
@@ -97,6 +99,8 @@ class FakeRagService:
             query_mode=query_mode,
             model_used="llama3",
             chunks_searched=len(results),
+            flare_enabled=use_flare,
+            flare_followup_retrieval=False,
         )
 
 

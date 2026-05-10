@@ -4,7 +4,8 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta name="color-scheme" content="light" />
-  <title>DocuMind - Upwork portfolio brief</title>
+  <title>DocuMind — Upwork portfolio &amp; project catalog brief</title>
+  <meta name="description" content="DocuMind: local-first research RAG (FastAPI, ChromaDB, Ollama, Next.js). Portfolio brief for Upwork attachments and proposals." />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;0,8..60,700;1,8..60,400&display=swap" rel="stylesheet" />
@@ -137,13 +138,38 @@
         color: #000 !important;
       }
       a { color: #000; text-decoration: underline; }
+      .figure-dashboard { page-break-inside: avoid; }
+      .figure-dashboard figcaption { color: #000 !important; }
+    }
+    .figure-dashboard {
+      margin: 1.5rem 0;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      overflow: hidden;
+      background: #f9fafb;
+    }
+    .figure-dashboard img {
+      width: 100%;
+      height: auto;
+      display: block;
+    }
+    .figure-dashboard figcaption {
+      padding: 12px 14px;
+      font-size: 0.92rem;
+      color: var(--muted);
+      border-top: 1px solid var(--border);
+      line-height: 1.45;
     }
   </style>
 </head>
 <body>
   <main>
     <h1>DocuMind</h1>
-    <p class="lede">Local-first RAG over a research library. Portfolio brief for Upwork (project catalog, attachments, or fixed-price scope notes).</p>
+    <p class="lede">Local-first RAG over a research library. Use this page as an <strong>Upwork attachment</strong> (save as PDF from Chrome/Edge) or paste sections into your <strong>Project Catalog</strong> and proposals. Replace only the bracketed profile link below.</p>
+
+    <div class="callout">
+      <strong>Before you publish:</strong> (1) Re-run the screenshot pipeline if the UI changed, (2) paste your Upwork profile URL below, (3) replace the pricing placeholders with your numbers, (4) add a staging URL or say you demo over screen share.
+    </div>
 
     <div class="callout">
       <strong>Best PDF (recommended):</strong> Open this file in <strong>Chrome</strong> or <strong>Edge</strong>, then
@@ -151,19 +177,27 @@
       &rarr; Background graphics: <strong>Off</strong> (cleaner). The script-generated PDF is a fallback; browser print usually looks better.
     </div>
 
-    <h2>One-line pitch</h2>
-    <p>Ingest PDFs, Word, and text; optional arXiv fetch; chunk with section-style metadata; ChromaDB vectors; retrieval with rerank and cross-paper diversity; answers from Ollama with mode-specific prompts and citations. FastAPI backend and Next.js dashboard.</p>
+    <figure class="figure-dashboard">
+      <a href="screenshots/documind-dashboard.png" title="Open full-resolution capture (1440×3200)">
+        <img src="screenshots/documind-upwork-catalog-1000x750.png" width="1000" height="750" alt="DocuMind dashboard after a live query — optimized 4:3 for Upwork Project Catalog thumbnails" loading="lazy" decoding="async" />
+      </a>
+      <figcaption><strong>Figure 1.</strong> <strong>1000×750</strong> (4:3): left column lists the stack; right column is a cropped live query from the Next UI. Full frame: <code>screenshots/documind-dashboard.png</code>. Regenerate: <code>scripts/capture_dashboard_playwright.py</code> or <code>python scripts/catalog_thumb_art.py --src … --out …</code>.</figcaption>
+    </figure>
 
-    <h2>What buyers get</h2>
+    <h2>One-line pitch</h2>
+    <p>Ingest PDFs, Word, and text; optional arXiv fetch; section-style chunk metadata; ChromaDB vectors; retrieval with rerank and cross-paper diversity; Ollama-backed answers with mode-specific prompts and citations; optional FLARE-style second retrieval. FastAPI service and Next.js UI; bundled sample corpus (~460 UTF-8 briefs) indexes when Ollama is available.</p>
+
+    <h2>What you ship in this shape</h2>
     <ul>
       <li>Grounded answers with source cards (title, section, chunk, distance).</li>
       <li>Modes: general Q&amp;A, compare, methodology, dataset map, reproducibility checklist.</li>
       <li>Ops: <code>/health/live</code>, <code>/health/ready</code>, <code>X-Request-ID</code>, optional <code>API_KEY</code> on <code>/api/v1</code>, CORS allowlist, gzip, security headers, optional JSON logs.</li>
       <li>Solid API behavior: 404 on empty delete, arXiv errors mapped to sensible status codes, validated section filters.</li>
+      <li>Next.js UI: status line, paper/chunk counts, preset long prompts, query form, synthesis + expandable sources.</li>
     </ul>
 
-    <h2>Standing out from &ldquo;top example&rdquo; RAG portfolios</h2>
-    <p>High-visibility public examples skew toward <strong>tutorial-complete</strong>, not <strong>procurement-complete</strong>. The same stacks appear in job posts: LangChain or LlamaIndex orchestration, Pinecone/FAISS/Weaviate, GPT-4 or Gemini, Streamlit or a thin Next wrapper. That is table stakes. DocuMind is positioned where serious clients look next: <strong>operability, retrieval discipline, and explicit acceptance hooks</strong>.</p>
+    <h2>Compared with typical &ldquo;RAG demo&rdquo; repos</h2>
+    <p>Many public examples stop at a single chain, one UI page, and a hosted model. Common stack: LangChain/LlamaIndex + managed vectors + OpenAI. DocuMind keeps an explicit <strong>HTTP contract</strong>, <strong>local inference</strong> as the default path, <strong>readiness vs liveness</strong> health split, pytest coverage on routers, and Docker notes in the README.</p>
     <table>
       <thead>
         <tr><th>Crowded pattern</th><th>Typical portfolio signal</th><th>DocuMind signal</th></tr>
@@ -192,7 +226,7 @@
       </tbody>
     </table>
     <div class="callout">
-      <strong>How to use this in proposals:</strong> Name the archetype the client is trying to avoid (single-PDF toy, opaque agents, no deploy story), then point to <strong>one metric and one artifact</strong> (for example: readiness endpoint passes on staging; milestone 2 acceptance table from <code>Upwork_Project_Catalog_Client.html</code>). That pattern wins against generic stack dumps.
+      <strong>Proposals:</strong> Tie scope to something measurable (e.g. <code>/health/ready</code> on their VM, or a fixed ingest count), then attach one screenshot and one milestone table from <code>Upwork_Project_Catalog_Client.html</code>.
     </div>
 
     <h2>Tech keywords</h2>
@@ -221,17 +255,20 @@
 
     <h2>Five-minute demo</h2>
     <ol>
-      <li>Boot API + UI (see repo README: <code>start_documind.ps1</code> or Docker).</li>
-      <li>Open dashboard, run the Flagship scenario, show synthesis and sources.</li>
-      <li>Open <code>/docs</code> and <code>/health/ready</code>; explain readiness vs liveness.</li>
-      <li>Mention optional <code>API_KEY</code> and CORS for staging.</li>
+      <li>Boot API + UI (README: <code>start_documind.ps1</code> on Windows or Docker Compose; first full corpus ingest can take a long time &mdash; use <code>-MaxApiWaitMinutes</code> on Windows).</li>
+      <li>Open the dashboard at <code>http://127.0.0.1:3002</code>; load <strong>Dataset map</strong> or <strong>Flagship</strong>, then <strong>Run query</strong>; expand <strong>Sources</strong>.</li>
+      <li>Open <code>/docs</code> and contrast <code>/health/live</code> vs <code>/health/ready</code>.</li>
+      <li>Mention optional <code>API_KEY</code>, CORS allowlist, and gzip for staging handoff.</li>
     </ol>
+
+    <h2>Companion artifact</h2>
+    <p>Fixed-price milestone template (same folder): <code>Upwork_Project_Catalog_Client.html</code> &mdash; adapt milestones and price to each client.</p>
 
     <h2>Your links</h2>
     <ul>
-      <li>Repository: [ GitHub URL ]</li>
-      <li>Live demo: [ URL or on request ]</li>
-      <li>Upwork profile: [ profile URL ]</li>
+      <li>Repository: <a href="https://github.com/cdtalley/DocuMind">https://github.com/cdtalley/DocuMind</a></li>
+      <li>Live demo: <strong>Screen share on request</strong> (local stack), or add your public staging URL here when you have one.</li>
+      <li>Upwork profile: [ replace with your profile URL ]</li>
     </ul>
   </main>
 </body>

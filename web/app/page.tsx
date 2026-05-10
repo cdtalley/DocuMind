@@ -393,6 +393,9 @@ export default function HomePage() {
     ? lastSync.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit", second: "2-digit" })
     : "—";
 
+  const indexedPapers = health?.collection_stats.paper_count ?? libraryStats.totalPapers;
+  const indexedChunks = health?.collection_stats.total_chunks ?? libraryStats.totalChunks;
+
   return (
     <div className="app-root">
       <a href="#workspace" className="skip-link">
@@ -403,7 +406,9 @@ export default function HomePage() {
           <span className="enterprise-topbar__logo" aria-hidden />
           <div>
             <div className="enterprise-topbar__title">DocuMind</div>
-            <div className="enterprise-topbar__subtitle">Enterprise research RAG · local vectors · grounded generation</div>
+            <div className="enterprise-topbar__subtitle">
+              Multi-document RAG · local Chroma + Ollama · FastAPI / OpenAPI
+            </div>
           </div>
         </div>
         <div className="enterprise-topbar__status" aria-live="polite">
@@ -414,8 +419,7 @@ export default function HomePage() {
             <span className="status-dot" /> Inference
           </span>
           <span className="status-chip status-chip--neutral">
-            <span className="status-dot" /> {health?.collection_stats.paper_count ?? libraryStats.totalPapers} docs ·{" "}
-            {(health?.collection_stats.total_chunks ?? libraryStats.totalChunks).toLocaleString()} chunks
+            <span className="status-dot" /> {indexedPapers} docs · {indexedChunks.toLocaleString()} chunks
           </span>
           <span className="enterprise-topbar__sync">Synced {syncLabel}</span>
         </div>
@@ -427,9 +431,28 @@ export default function HomePage() {
         </div>
       </header>
 
+      <div className="demo-trust-bar" role="list" aria-label="Capabilities">
+        <span className="demo-trust-bar__item" role="listitem">
+          Answers cite retrieved chunks
+        </span>
+        <span className="demo-trust-bar__item" role="listitem">
+          Runs on localhost by default
+        </span>
+        <span className="demo-trust-bar__item" role="listitem">
+          Five query modes (incl. compare / datasets)
+        </span>
+        <span className="demo-trust-bar__item" role="listitem">
+          Ingest API + optional arXiv pull
+        </span>
+      </div>
+
       <main className="layout">
         <aside className="sidebar">
           <h1 className="sidebar-title">Control plane</h1>
+          <p className="sidebar-tagline">
+            Same data the UI uses: <code>/health</code> and <code>/api/v1/papers</code>. Refresh after ingest or
+            re-index.
+          </p>
           <p className="pill">Ollama · Chroma · FastAPI</p>
           <p className="api-hint">Dashboard uses this endpoint for all requests.</p>
           <div className="grid" style={{ marginTop: 16 }}>
@@ -443,10 +466,8 @@ export default function HomePage() {
             </div>
             <div className="card card--inset">
               <strong className="sidebar-card-label">Vector store</strong>
-              <p className="sidebar-metric">Papers · {health?.collection_stats.paper_count ?? libraryStats.totalPapers}</p>
-              <p className="sidebar-metric">
-                Chunks · {(health?.collection_stats.total_chunks ?? libraryStats.totalChunks).toLocaleString()}
-              </p>
+              <p className="sidebar-metric">Papers · {indexedPapers}</p>
+              <p className="sidebar-metric">Chunks · {indexedChunks.toLocaleString()}</p>
               <p className="sidebar-collection">{health?.collection_stats.collection_name ?? "documind_papers"}</p>
             </div>
             <button type="button" className="btn-ghost" onClick={() => void refresh()}>
@@ -459,15 +480,30 @@ export default function HomePage() {
           <div className="card card--hero">
             <div className="card-hero-head">
               <div>
-                <h2 className="card-hero-title">Multi-document intelligence</h2>
+                <h2 className="card-hero-title">Cross-document retrieval</h2>
                 <p className="card-hero-lead">
-                  Retrieval-augmented Q&amp;A with mode-specific prompts, citation-backed sources, and audit-friendly
-                  grounding. Use showcase scenarios for a full cross-corpus demo.
+                  Query modes change prompts and filters. Each run returns Markdown, a confidence value, and optional
+                  FLARE-style second retrieval. Pick a showcase card, run query, then open Sources to inspect chunk
+                  text and distances.
                 </p>
               </div>
               <span className="kbd-hint" title="Submit from the question field">
                 Ctrl+Enter
               </span>
+            </div>
+            <div className="hero-metrics" aria-label="Index snapshot">
+              <div className="hero-metric">
+                <div className="hero-metric__value">{indexedPapers}</div>
+                <div className="hero-metric__label">Indexed papers</div>
+              </div>
+              <div className="hero-metric">
+                <div className="hero-metric__value">{indexedChunks.toLocaleString()}</div>
+                <div className="hero-metric__label">Vector chunks</div>
+              </div>
+              <div className="hero-metric">
+                <div className="hero-metric__value">{modes.length}</div>
+                <div className="hero-metric__label">Retrieval modes</div>
+              </div>
             </div>
           </div>
 
@@ -480,39 +516,41 @@ export default function HomePage() {
           >
             {loading && <div className="loading-strip" aria-hidden />}
 
-            <div className="card card--inset" style={{ marginBottom: 16 }}>
-            <strong>Showcase scenarios</strong>
-            <p style={{ fontSize: 14, color: "var(--text-muted)", marginTop: 8 }}>
-              Curated prompts designed for a multi-domain corpus (NLP, vision, tabular, graphs, time series,
-              alignment). Pick one, then run query.
-            </p>
-            <div className="grid" style={{ marginTop: 12, gap: 8 }}>
-              {SHOWCASE_SCENARIOS.map((s) => (
-                <button
-                  key={s.id}
-                  type="button"
-                  className="showcase-btn"
-                  onClick={() => applyScenario(s)}
-                  disabled={loading}
-                >
-                  <strong>{s.label}</strong>
-                  <div style={{ fontSize: 12, fontWeight: 400, opacity: 0.85, marginTop: 4 }}>{s.description}</div>
-                </button>
-              ))}
+            <div className="card card--inset showcase-section">
+              <span className="section-eyebrow">Sample prompts</span>
+              <strong>Showcase scenarios</strong>
+              <p className="showcase-section__intro">
+                Long prompts tuned for a mixed-topic corpus. A card loads query text, mode, section filter, and Top K;
+                then use Run query or Submit.
+              </p>
+              <div className="showcase-grid">
+                {SHOWCASE_SCENARIOS.map((s, idx) => (
+                  <button
+                    key={s.id}
+                    type="button"
+                    className="showcase-btn"
+                    onClick={() => applyScenario(s)}
+                    disabled={loading}
+                  >
+                    <span className="showcase-btn__idx">Scenario {String(idx + 1).padStart(2, "0")}</span>
+                    <span className="showcase-btn__label">{s.label}</span>
+                    <span className="showcase-btn__desc">{s.description}</span>
+                  </button>
+                ))}
+              </div>
             </div>
-          </div>
 
-          <div className="grid two" style={{ marginBottom: 12 }}>
+          <div className="grid two workspace-actions">
             <button type="button" className="btn-ghost" onClick={loadDemoPreset} disabled={loading}>
               Reset to flagship
             </button>
-            <button type="button" onClick={() => void runQuery()} disabled={loading}>
+            <button type="button" className="btn-cta" onClick={() => void runQuery()} disabled={loading}>
               {loading ? "Running…" : "Run query"}
             </button>
           </div>
 
           <form className="grid two" onSubmit={askPapers}>
-            <div style={{ gridColumn: "1 / span 2" }}>
+            <div className="form-span-2">
               <label htmlFor="query-input">Question</label>
               <textarea
                 id="query-input"
@@ -563,7 +601,7 @@ export default function HomePage() {
                 onChange={(e) => setTopK(Number(e.target.value))}
               />
             </div>
-            <div style={{ gridColumn: "1 / span 2" }}>
+            <div className="form-span-2">
               <label className="flare-check">
                 <input
                   id="use-flare"
@@ -578,8 +616,8 @@ export default function HomePage() {
                 </span>
               </label>
             </div>
-            <div style={{ alignSelf: "end" }}>
-              <button type="submit" disabled={loading}>
+            <div className="form-actions-end">
+              <button type="submit" className="btn-cta" disabled={loading}>
                 {loading ? "Running…" : "Submit"}
               </button>
             </div>
@@ -674,7 +712,7 @@ export default function HomePage() {
 
         <div className="grid two">
           <div className="card">
-            <h2>Upload papers</h2>
+            <h2 className="card-h2">Upload papers</h2>
             <label htmlFor="ingest-files" className="visually-hidden">
               Choose PDF, Word, or text files to index
             </label>
@@ -687,7 +725,7 @@ export default function HomePage() {
             />
           </div>
           <div className="card">
-            <h2>Fetch from arXiv</h2>
+            <h2 className="card-h2">Fetch from arXiv</h2>
             <label htmlFor="arxiv-id-input">arXiv ID</label>
             <input
               id="arxiv-id-input"
@@ -696,24 +734,27 @@ export default function HomePage() {
               onChange={(e) => setArxivId(e.target.value)}
               placeholder="1706.03762"
             />
-            <button type="button" style={{ marginTop: 10 }} onClick={() => void fetchArxiv()}>
+            <button type="button" className="ingest-actions btn-cta" onClick={() => void fetchArxiv()}>
               Fetch PDF
             </button>
           </div>
         </div>
 
         <div className="card">
-          <h2>Paper library</h2>
+          <div className="library-card-header">
+            <h2 className="card-h2">Paper library</h2>
+            <span className="library-count">{indexedPapers} in index</span>
+          </div>
           {papers.length === 0 ? (
             <p style={{ color: "var(--text-muted)" }}>
               No vectors yet — start the API with Ollama so bundled samples index, or upload / fetch above.
             </p>
           ) : null}
-          <div className="grid">
+          <div className="library-grid">
             {displayPapers.map((paper) => (
-              <div className="card card--inset" key={paper.doc_id}>
+              <div className="card card--inset library-card" key={paper.doc_id}>
                 <strong>{paper.title}</strong>
-                <p style={{ fontSize: 14, color: "var(--text-muted)", margin: "8px 0" }}>
+                <p className="card-meta">
                   {(paper.authors || "—") + (paper.year ? ` · ${paper.year}` : "")} · {paper.chunk_count} chunks
                 </p>
                 {paper.arxiv_id && (

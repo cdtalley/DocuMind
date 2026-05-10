@@ -264,7 +264,7 @@ Applied in `app/main.py` (order matters for FastAPI / Starlette):
 |--------|------------------|
 | **Docker Compose** | `docker compose up --build` — publishes **8001**, mounts Chroma volume `chroma_data`, read-only `./data`. Set `OLLAMA_BASE_URL` to reachable Ollama (default `host.docker.internal:11434` on Docker Desktop). |
 | **Bare metal / VM** | `uvicorn app.main:app --host 0.0.0.0 --port 8001` (add `--proxy-headers` behind TLS terminator per your platform). |
-| **Windows dev** | `.\start_documind.ps1` (Ollama, API, Next); `-SkipModelPull` for repeat boots. `.\stop_documind.ps1` clears ports **3002**, **8001**, **11434** — confirm Ollama shutdown is intended. |
+| **Windows dev** | `.\start_documind.ps1` (Ollama, API, Next); uses `.venv\Scripts\python.exe` when present. **First boot** can sit in corpus ingest for a long time before `/health` responds; the script waits up to **180** minutes (`-MaxApiWaitMinutes`). `-SkipModelPull` speeds repeat boots. `.\stop_documind.ps1` clears ports **3002**, **8001**, **11434** — confirm Ollama shutdown is intended. |
 
 **Backup:** Copy `CHROMA_PERSIST_DIR` regularly; it is the authoritative index. Source PDFs/DOCX should remain in object storage or VCS-independent archives if they are not all under `data/`.
 
@@ -305,7 +305,19 @@ Natural extensions: swap Ollama for OpenAI/Azure OpenAI behind the same `RAGServ
 
 ## 17. Portfolio artifacts
 
-Under **`portfolio/`**: client project catalog HTML, portfolio brief HTML, optional PDF generation (`scripts/portfolio_requirements.txt`, `scripts/generate_portfolio_pdf.py`), dashboard screenshot `portfolio/screenshots/documind-dashboard.png` (regenerate with Playwright against `http://127.0.0.1:3002/` when the stack is running).
+Under **`portfolio/`**: client project catalog HTML, portfolio brief HTML, optional PDF generation (`scripts/portfolio_requirements.txt`, `scripts/generate_portfolio_pdf.py`), dashboard screenshot **`portfolio/screenshots/documind-dashboard.png`**.
+
+**Regenerating the screenshot (recommended):** A bare `playwright screenshot` of the home page misses indexed doc counts and synthesis. Use the bundled driver after API + Next are up and sample ingest has progressed:
+
+```powershell
+.\.venv\Scripts\pip install -r scripts\screenshot_requirements.txt
+.\.venv\Scripts\playwright install chromium
+.\scripts\capture_dashboard.ps1                    # waits for /health/live, Flagship query, waits for real synthesis text, tall-viewport PNG
+# Smaller corpus / faster index gate:  .\scripts\capture_dashboard.ps1 -MinDocs 40
+# Custom API / wait cap:                .\scripts\capture_dashboard.ps1 -ApiBase "http://127.0.0.1:8001" -MaxLivenessWaitMinutes 240
+```
+
+Or directly: `.\.venv\Scripts\python scripts\capture_dashboard_playwright.py --help` — waits for **≥120 chars** in `.prose-answer`, scrolls synthesis into view, writes **1440×3200** `portfolio/screenshots/documind-dashboard.png`, then **1000×750** `portfolio/screenshots/documind-upwork-catalog-1000x750.png` (stack summary + cropped UI; `--plain-catalog-thumb` is a plain top-crop). Thumb only: `.\.venv\Scripts\python scripts\capture_dashboard_playwright.py --thumb-only`. Standalone: `python scripts/catalog_thumb_art.py --src portfolio/screenshots/documind-dashboard.png --out portfolio/screenshots/documind-upwork-catalog-1000x750.png`. Avoid `--full-page` for portfolio assets.
 
 ---
 
