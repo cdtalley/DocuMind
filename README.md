@@ -1,256 +1,321 @@
-# DocuMind
+# DocuMind — Technical Reference
 
-**DocuMind** is a **local-first**, **grounded** retrieval-augmented generation (RAG) platform for research and technical document libraries. Ingest PDF, DOCX, and plain text; optionally fetch arXiv PDFs by ID; index into a **persistent vector store**; query through a **versioned REST API** with **citation-backed** answers and multiple **task-specific** reasoning modes.
+DocuMind is a **local-first retrieval-augmented generation (RAG)** system for technical and research document libraries. Documents are **ingested**, **chunked**, **embedded** into **ChromaDB** (cosine space), and **queried** through a **FastAPI** surface. Answers are **grounded** on retrieved passages, returned with **structured citations**, and shaped by **mode-specific** generation policies. Default **LLM and embedding inference** run via **Ollama** on operator-controlled hardware.
 
-Default inference uses **Ollama** (`llama3`, `nomic-embed-text`) on infrastructure you control—no third-party LLM API keys required for the baseline deployment.
-
----
-
-## At a glance
-
-| Dimension | Summary |
-|-----------|---------|
-| **Workload** | Multi-document Q&A, comparison, methodology extraction, dataset inventory, reproducibility checklists |
-| **API** | FastAPI, OpenAPI (`/docs`), `/api/v1/*` with optional **API key** enforcement |
-| **Persistence** | ChromaDB on disk; configurable path and collection name |
-| **Clients** | Next.js 15 operator dashboard (`web/`); optional Streamlit UI (`frontend/app.py`) |
-| **Quality gates** | `pytest` suite; optional evaluation fixtures under `evaluation/` |
-| **Container** | `Dockerfile` (Python 3.11-slim, non-root user); `docker-compose.yml` with volume-backed Chroma and Compose **healthcheck** |
+This document specifies **architecture**, **control flows**, **configuration**, and **operational behavior** sufficient for engineering review, extension, and production hardening.
 
 ---
 
-## Architecture
+## Table of contents
+
+1. [System overview](#1-system-overview)  
+2. [Design principles](#2-design-principles)  
+3. [Repository layout](#3-repository-layout)  
+4. [Runtime architecture](#4-runtime-architecture)  
+5. [Data lifecycle: ingest → index](#5-data-lifecycle-ingest--index)  
+6. [Retrieval and generation pipeline](#6-retrieval-and-generation-pipeline)  
+7. [Query modes](#7-query-modes)  
+8. [FLARE-inspired active retrieval](#8-flare-inspired-active-retrieval)  
+9. [HTTP API](#9-http-api)  
+10. [Configuration](#10-configuration)  
+11. [Security middleware](#11-security-middleware)  
+12. [Observability and reliability](#12-observability-and-reliability)  
+13. [Deployment](#13-deployment)  
+14. [Bundled corpus and scripts](#14-bundled-corpus-and-scripts)  
+15. [Testing](#15-testing)  
+16. [Known limitations and extension points](#16-known-limitations-and-extension-points)  
+17. [Portfolio artifacts](#17-portfolio-artifacts)  
+18. [References](#18-references)
+
+---
+
+## 1. System overview
+
+| Layer | Responsibility |
+|-------|------------------|
+| **Presentation** | Next.js 15 dashboard (`web/`) for operator workflows; optional Streamlit (`frontend/app.py`) calling the same REST API. |
+| **Application** | FastAPI application (`app/main.py`): routing, middleware, dependency injection, lifespan-managed singletons. |
+| **Domain services** | Document parsing and chunking (`app/services/document_service.py`, `app/utils/chunker.py`); vector persistence (`app/services/embedding_service.py`); RAG orchestration (`app/services/rag_service.py`). |
+| **Model I/O** | Ollama client (`app/utils/ollama_client.py`): chat completions and per-text embeddings over HTTP. |
+| **Persistence** | Chroma persistent client on disk (`CHROMA_PERSIST_DIR`); collection metadata uses **cosine** distance (`hnsw:space: cosine`). |
+
+**Ports (convention):** API **8001**, Next.js dev **3002**, Ollama **11434**.
+
+---
+
+## 2. Design principles
+
+1. **Grounding first** — Final user-facing answers for LLM-backed modes are conditioned only on retrieved chunk text; prompts explicitly forbid inventing papers, metrics, or datasets absent from context.  
+2. **Explicit provenance** — Responses include `SourceCitation` objects (document id, title, section, page hint, chunk index, distance, preview).  
+3. **Dependency-aware serving** — **Liveness** vs **readiness** split so orchestrators can distinguish “process up” from “dependencies usable”.  
+4. **Configurable retrieval policy** — Top‑k, distance cutoff, keyword rerank weight, fallback when strict filtering returns nothing, and diversity caps are all **environment-tunable**.  
+5. **Single-tenant baseline** — One shared library index per deployment; ACLs per document are **not** implemented in-tree (see [§16](#16-known-limitations-and-extension-points)).
+
+---
+
+## 3. Repository layout
+
+| Path | Role |
+|------|------|
+| `app/main.py` | FastAPI app, lifespan, global exception handler, middleware, router includes. |
+| `app/config.py` | `pydantic-settings` `Settings`; single cached `get_settings()`. |
+| `app/logging_config.py` | Optional JSON logging layout. |
+| `app/routers/ingest.py` | Multipart ingest, delete by `doc_id`. |
+| `app/routers/papers.py` | List / get / delete paper metadata from index. |
+| `app/routers/query.py` | RAG query and collection stats. |
+| `app/routers/arxiv.py` | arXiv PDF fetch by id. |
+| `app/services/document_service.py` | File type detection, text extraction, delegation to chunker. |
+| `app/services/embedding_service.py` | Chroma add/query/delete; Ollama embeddings. |
+| `app/services/rag_service.py` | Retrieval, rerank, diversity, mode prompts, FLARE branch, Ollama chat. |
+| `app/utils/chunker.py` | `RecursiveCharacterTextSplitter`; section heuristics in metadata. |
+| `app/utils/ollama_client.py` | Retry-wrapped HTTP to Ollama `/api/chat` and `/api/embeddings`. |
+| `app/models/` | Pydantic request/response models shared by routers. |
+| `data/sample_docs/` | Bundled UTF-8 corpus (see [§14](#14-bundled-corpus-and-scripts)). |
+| `tests/` | API and unit tests; `tests/conftest.py` uses dependency overrides and fake embedding/RAG for isolation. |
+| `evaluation/` | Optional regression fixtures for pipeline shape. |
+| `scripts/` | Corpus generators, portfolio PDF, arXiv bulk helpers. |
+| `web/` | Next.js operator UI. |
+| `Dockerfile` / `docker-compose.yml` | Container image (Python 3.11-slim, non-root) and Compose stack with Chroma volume + healthcheck. |
+
+---
+
+## 4. Runtime architecture
 
 ```mermaid
-flowchart LR
+flowchart TB
   subgraph clients [Clients]
-    WEB[Next.js]
-    ST[Streamlit]
+    N[Next.js]
+    S[Streamlit]
   end
   subgraph api [DocuMind API]
-    FAST[FastAPI]
-    ING[Ingest / chunk]
-    RAG[RAG + modes]
+    F[FastAPI]
+    L[Lifespan: services + seed]
   end
-  subgraph data [Data plane]
-    CHR[ChromaDB]
-    OLL[Ollama LLM + embeddings]
+  subgraph svc [Services]
+    D[DocumentService]
+    E[ChromaEmbeddingService]
+    R[RAGService]
   end
-  WEB --> FAST
-  ST --> FAST
-  FAST --> ING
-  FAST --> RAG
-  ING --> CHR
-  RAG --> CHR
-  RAG --> OLL
+  subgraph ext [External]
+    O[Ollama]
+    C[(ChromaDB)]
+  end
+  N --> F
+  S --> F
+  F --> L
+  L --> D
+  L --> E
+  L --> R
+  D --> E
+  R --> E
+  R --> O
+  E --> O
+  E --> C
 ```
 
-1. **Ingestion** — Type and size validation; text extraction (PyPDF2, python-docx, raw text); lightweight metadata (title, authors, year, arXiv id when detectable).
-2. **Chunking** — LangChain `RecursiveCharacterTextSplitter` with configurable `CHUNK_SIZE` / `CHUNK_OVERLAP`; section hints from leading lines.
-3. **Indexing** — Embeddings via Ollama; vectors stored in Chroma with cosine distance.
-4. **Retrieval** — Top‑k retrieval, optional **section filter**, distance threshold, **keyword-overlap rerank**, and **cross-document diversity** so a single paper does not dominate the context window. Optional **fallback retrieval** when strict thresholds would return nothing (tunable).
-5. **Generation** — Mode-specific system prompts; structured **source citations** on responses; optional **FLARE-inspired** second retrieval pass (see below).
+**Lifespan (`app/main.py`):** On startup, constructs `OllamaClient`, `ChromaEmbeddingService`, `DocumentService`, `RAGService`. Runs `seed_sample_docs()` when Ollama is healthy: compares `SAMPLE_CORPUS_VERSION` marker on disk to settings; on mismatch, deletes `sample_*` vectors, rewrites marker, then ingests each `data/sample_docs/*.txt` as `sample_<stem>`.
 
-Application services are wired through FastAPI **lifespan** hooks (singletons for embedding, document, and RAG services).
+**Routers** mount under `/api/v1` except health routes at root.
 
 ---
 
-## Capabilities
+## 5. Data lifecycle: ingest → index
 
-- **Formats** — `.pdf`, `.docx`, `.txt` upload; arXiv fetch by ID.
-- **Query modes** — `general`, `compare`, `methodology`, `datasets`, `reproduce` (see [Query modes](#query-modes)).
-- **FLARE-style active retrieval** (optional) — Second embedding search when a short **forward-looking draft** marks uncertainty (`???` or explicit excerpt-level hedges). Full [FLARE](https://arxiv.org/abs/2305.06983) uses token logprobs; Ollama chat here does not expose them, so this is a **documented, heuristic** variant. Enable with `use_flare` on `POST /api/v1/query`, UI toggle, or `FLARE_ACTIVE_RETRIEVAL=true`. **Dataset Finder** mode skips FLARE (deterministic extraction path).
-- **Bundled corpus** — `data/sample_docs/` ships **~460** UTF-8 technical briefs (landmark-style summaries plus **400** reproducible `sample_corpus_p7_*.txt` synth papers from `scripts/generate_production_corpus.py`). Indexed as `sample_*` document ids; expect **on the order of 5k–10k chunks** after ingest (depends on `CHUNK_SIZE`). Bump **`SAMPLE_CORPUS_VERSION`** (now **7**) to purge and re-seed sample rows on startup (requires Ollama). Regenerate or resize: `python scripts/generate_production_corpus.py --count 500 --force`.
-- **Bulk arXiv** — `scripts/bulk_ingest_arxiv.py` with `data/arxiv_seed_list.txt` (client-side throttling).
+### 5.1 Ingestion
 
----
+- **Input:** `POST /api/v1/ingest` (multipart file) or `POST /api/v1/fetch-arxiv` (JSON `arxiv_id`).  
+- **Validation:** File size cap `MAX_FILE_SIZE_MB`; MIME/type checks in ingest router / document service.  
+- **Extraction:** PyPDF2 for PDF, python-docx for DOCX, raw decode for `.txt`.  
+- **Metadata:** Heuristic title, authors, year, optional arXiv id from leading text when parseable.  
+- **Chunking:** `DocumentChunker` uses LangChain `RecursiveCharacterTextSplitter` with `CHUNK_SIZE` and `CHUNK_OVERLAP`. Each `langchain_core.documents.Document` carries metadata: `doc_id`, `filename`, `section` (heuristic), `chunk_index`, `page_number` when known, etc.  
+- **Indexing:** `ChromaEmbeddingService.add_documents` embeds each chunk via Ollama `EMBEDDING_MODEL`, writes to Chroma with stable ids `{doc_id}_{i}` and metadata including `doc_id` for deletion and listing.
 
-## Production and operations
+### 5.2 Deletion semantics
 
-### Health and readiness
+`DELETE /api/v1/papers/{doc_id}` and `DELETE /api/v1/ingest/{doc_id}` call `embedding_service.delete_document`. If no chunks exist for that `doc_id`, the service returns **false** and the API responds **404** — empty delete is not silently successful.
 
-| Endpoint | Role |
-|----------|------|
-| `GET /health/live` | **Liveness** — process accepts traffic (orchestrator / LB probe). |
-| `GET /health/ready` | **Readiness** — **200** when Ollama and Chroma are usable; **503** when dependencies are degraded. |
-| `GET /health` | Aggregate status: models, collection statistics, degraded vs. healthy. |
+### 5.3 Vector space
 
-### Observability
-
-- **`X-Request-ID`** on responses; correlated in application logs.
-- **`LOG_JSON=true`** — structured JSON log lines for log aggregation stacks.
-- **`LOG_LEVEL`** — standard Python logging levels.
-
-### Security controls
-
-- **`API_KEY`** — When set, `/api/v1/*` requires header **`X-API-Key`** (omit in local dev when using the bundled UI without a key).
-- **`CORS_ORIGINS`** — Explicit allowlist; **`CORS_ALLOW_ALL`** for tightly controlled local demos only.
-- **`TRUSTED_HOSTS`** — Optional `TrustedHostMiddleware` when terminating TLS at a reverse proxy.
-- **`DISABLE_OPENAPI`** — Disable `/docs` and `/redoc` in locked-down environments.
-- **Response compression** — `ENABLE_RESPONSE_GZIP` when clients send `Accept-Encoding: gzip`.
-- **Chroma telemetry** — Anonymized telemetry defaulted off unless opted in at the library level.
-
-Secrets belong in **environment** or a secrets manager—never commit `.env` (see `.gitignore`).
-
-### Deployment patterns
-
-| Pattern | Notes |
-|---------|--------|
-| **Docker Compose** | `docker compose up --build` — API on **8001**, Chroma in named volume `chroma_data`, `./data` mounted read-only. **Ollama is expected on the host** at `http://host.docker.internal:11434` (Docker Desktop). Adjust `OLLAMA_BASE_URL` for Linux hosts or sidecar layouts. |
-| **Process + reverse proxy** | Run Uvicorn behind nginx, Traefik, or cloud LB; terminate TLS at the edge; set `TRUSTED_HOSTS` and narrow `CORS_ORIGINS`. |
-| **Windows developer loop** | `.\start_documind.ps1` / `.\stop_documind.ps1` — fixed ports **8001** (API), **3002** (Next.js). Use `-SkipModelPull` after initial model pull. |
-
-### Data lifecycle and backup
-
-- **Vector index** — Lives under `CHROMA_PERSIST_DIR` (default `./chroma_db`; Docker: `/app/chroma_db` volume). **Back up this directory** for disaster recovery; re-ingest from source documents if rebuilding from scratch.
-- **Operational change** — Raising `SAMPLE_CORPUS_VERSION` triggers removal and re-indexing of `sample_*` documents on next startup.
-
-### Resource guidance
-
-- **Python** — **3.11+** for production alignment with the `Dockerfile`; newer interpreters may work locally with a project `.venv`.
-- **Node** — **18+** for the Next.js dashboard.
-- **Memory** — Treat **~8 GB RAM** as a practical floor for comfortable `llama3` + embeddings on a laptop; scale up for larger models or concurrent users.
+Chroma collection is created with `metadata={"hnsw:space": "cosine"}`. Query results expose **distance** per hit; the RAG layer sorts ascending (**lower distance = closer match**) and keeps rows with **`distance < RELEVANCE_THRESHOLD`** before optional fallback (threshold is a tunable cutoff on this distance scale for your embedding model and corpus).
 
 ---
 
-## Installation
+## 6. Retrieval and generation pipeline
 
-### Recommended: project virtual environment
+All logic below is implemented in `app/services/rag_service.py` unless noted.
 
-Isolated dependencies avoid LangChain / `langchain_core` import mismatches with a system Python.
+### 6.1 Retrieval budget
 
-```bash
-python -m venv .venv
-# Windows
-.\.venv\Scripts\pip install -r requirements.txt
-# macOS / Linux
-# source .venv/bin/activate && pip install -r requirements.txt
-cp .env.example .env
-ollama pull llama3
-ollama pull nomic-embed-text
-.\.venv\Scripts\python -m uvicorn app.main:app --host 127.0.0.1 --port 8001 --reload
-```
+For a user `top_k` and `query_mode`, the service expands the **vector search** `n_results` before reranking (e.g. up to 64 for `general` / `compare`, up to 56 for other modes). This widens the candidate pool so rerank and diversity filters have material to work with.
 
-### Frontend
+### 6.2 Vector search and rerank
 
-```bash
-cd web
-npm install
-npm run dev -- -p 3002
-```
+1. `embedding_service.search(embed_query, retrieve_k, section_filter)` returns rows `{content, metadata, distance}`.  
+2. **Keyword rerank:** Rows are sorted by  
+   `distance − KEYWORD_RERANK_WEIGHT × keyword_overlap_score(rerank_query, content)`  
+   so lexical overlap with the user question can reorder within a distance band.  
+3. **Threshold filter:** Keep rows with `distance < RELEVANCE_THRESHOLD`.  
+4. **Fallback:** If nothing passes and `ENABLE_FALLBACK_RETRIEVAL` is true, take the top `FALLBACK_TOP_N` by rerank order and mark internally (answer may append a disclosure line).  
+5. **Diversity:** `_select_diverse_sources` prefers at most one strong chunk per `doc_id` before filling remaining slots, reducing single-document context monopolization.  
+6. **Context slot cap:** Depends on `query_mode` (e.g. up to 24 chunks for `general` / `compare`).
 
-Set **`NEXT_PUBLIC_API_BASE_URL`** to the API origin (e.g. `http://127.0.0.1:8001`) when the browser does not same-origin the API.
+### 6.3 Generation
 
-### Optional Streamlit
-
-```bash
-streamlit run frontend/app.py
-```
-
-### Windows automation
-
-```powershell
-.\start_documind.ps1          # first boot: ensures Ollama, pulls models if missing, API + Next
-.\start_documind.ps1 -SkipModelPull
-.\stop_documind.ps1           # stops listeners on 3002, 8001, 11434 — review if Ollama should stay up
-.\demo_healthcheck.ps1
-.\interview_demo.ps1
-```
-
-### Docker
-
-```bash
-docker compose up --build
-```
-
-Compose defines a **healthcheck** against `/health/live` (see `docker-compose.yml`).
-
-### Troubleshooting (frontend)
-
-If Next.js reports missing `./NNN.js` under `.next`, stop the dev server, run `npm run clean` in `web/`, and restart. On Windows, stop the dev server before `npm install` if `@next/swc*` reports `EBUSY`. OneDrive paths can confuse `.next`; cleaning the build directory usually resolves it.
+- **`datasets` mode:** Does **not** call the LLM for the main body. It scans retrieved chunk text for known dataset hints and patterns, emits a structured Markdown inventory. FLARE is **skipped**.  
+- **Other modes:** Builds a single context block from selected chunks, applies the mode’s system prompt from `SYSTEM_PROMPTS`, calls `OllamaClient.chat` with mode-dependent temperature, returns Markdown answer plus `SourceCitation` list.  
+- **Confidence:** Derived from mean chunk distance (clamped); exposed as a scalar for UI.
 
 ---
 
-## Configuration
+## 7. Query modes
 
-Authoritative keys and defaults are documented in **`.env.example`**, including:
+| `query_mode` | Behavior |
+|--------------|----------|
+| `general` | Broad grounded synthesis; higher temperature than methodology. |
+| `compare` | Cross-paper comparison framing; large retrieval budget; table-oriented prompt. |
+| `methodology` | Implementation-focused extraction; moderate temperature. |
+| `datasets` | Deterministic dataset / benchmark surfacing from chunk text. |
+| `reproduce` | Reproducibility checklist style; structured sections in prompt. |
 
-- Ollama URL and model names  
-- Chroma path and collection  
-- Chunk size, overlap, relevance threshold, fallback retrieval  
-- CORS, trusted hosts, API key, logging, gzip  
-- `SAMPLE_CORPUS_VERSION`, **FLARE** toggles (`FLARE_ACTIVE_RETRIEVAL`, `FLARE_DRAFT_MAX_CONTEXT_CHARS`)
-
----
-
-## API surface
-
-| Method | Path | Description |
-|--------|------|----------------|
-| GET | `/health` | Full dependency and collection status |
-| GET | `/health/live` | Liveness |
-| GET | `/health/ready` | Readiness |
-| POST | `/api/v1/ingest` | Multipart file upload |
-| DELETE | `/api/v1/ingest/{doc_id}` | **404** if nothing indexed for id |
-| POST | `/api/v1/fetch-arxiv` | JSON body `{ "arxiv_id": "..." }` |
-| POST | `/api/v1/query` | JSON: `query`, `top_k`, `query_mode`, optional `section_filter`, optional `use_flare` |
-| GET | `/api/v1/papers` | Library listing |
-| GET | `/api/v1/papers/{doc_id}` | Single document metadata |
-| DELETE | `/api/v1/papers/{doc_id}` | Delete indexed document (**404** if missing) |
-| GET | `/api/v1/collection/stats` | Chunk and paper counts |
-
-OpenAPI: **`/docs`** (unless `DISABLE_OPENAPI=true`).
+Optional **`section_filter`** restricts Chroma `where` clause on metadata `section` (abstract, introduction, methodology, experiments, results, conclusion).
 
 ---
 
-## Query modes
+## 8. FLARE-inspired active retrieval
 
-| Mode | Purpose |
-|------|---------|
-| `general` | Grounded Q&A with citations |
-| `compare` | Cross-paper comparison framing |
-| `methodology` | Implementation-oriented extraction |
-| `datasets` | Dataset / benchmark mentions with structured hints from hits |
-| `reproduce` | Checklist-style reproducibility planning grounded in excerpts |
+Full **FLARE** ([Jiang et al., arXiv:2305.06983](https://arxiv.org/abs/2305.06983)) uses **token-level confidence** to trigger mid-generation retrieval. Ollama’s chat API used here does **not** expose per-token logprobs.
+
+**Implementation:** When `use_flare` (request) or `FLARE_ACTIVE_RETRIEVAL` (settings) is true and mode ≠ `datasets`:
+
+1. Run the standard first-pass retrieval → context selection.  
+2. Build a **truncated mini-context** (bounded by `FLARE_DRAFT_MAX_CONTEXT_CHARS`) from selected chunks.  
+3. Call the LLM once with `FLARE_DRAFT_SYSTEM` to produce a **2–4 sentence forward-looking draft**; unsupported facts must appear as `???` or explicit excerpt-level hedges.  
+4. If `flare_triggers_follow_up(draft)` is true, run a **second** `search` with a composite query (user question + draft excerpt, capped length).  
+5. **Merge** reranked lists by chunk identity, keeping the **better** (lower) distance per chunk; re-run threshold, fallback, and diversity on the merged set.  
+6. Final synthesis uses merged chunks. Response fields `flare_enabled` and `flare_followup_retrieval` record what occurred.
 
 ---
 
-## Testing
+## 9. HTTP API
+
+| Method | Path | Body / params | Notes |
+|--------|------|---------------|--------|
+| GET | `/health` | — | Ollama availability + collection stats. |
+| GET | `/health/live` | — | Process liveness. |
+| GET | `/health/ready` | — | **503** if dependencies not ready. |
+| POST | `/api/v1/ingest` | `multipart/form-data` file | Returns ingest stats JSON. |
+| DELETE | `/api/v1/ingest/{doc_id}` | — | **404** if no chunks. |
+| POST | `/api/v1/fetch-arxiv` | `{ "arxiv_id": "..." }` | Downloads PDF, ingests. |
+| POST | `/api/v1/query` | `QueryRequest` JSON | See `app/models/request_models.py`. |
+| GET | `/api/v1/papers` | — | Library cards. |
+| GET | `/api/v1/papers/{doc_id}` | — | One document. |
+| DELETE | `/api/v1/papers/{doc_id}` | — | **404** if no chunks. |
+| GET | `/api/v1/collection/stats` | — | Aggregate counts. |
+
+**OpenAPI:** `/docs`, `/redoc`, `/openapi.json` unless `DISABLE_OPENAPI=true`.
+
+**Authentication:** When `API_KEY` is non-empty, all `/api/v1/*` routes (except CORS preflight) require header **`X-API-Key`** matching the setting; mismatch → **401**.
+
+---
+
+## 10. Configuration
+
+All keys are listed in **`.env.example`**. Grouped reference:
+
+| Group | Variables | Purpose |
+|-------|-----------|---------|
+| **Models** | `OLLAMA_BASE_URL`, `LLM_MODEL`, `EMBEDDING_MODEL` | Inference endpoints and model tags. |
+| **Vector store** | `CHROMA_PERSIST_DIR`, `CHROMA_COLLECTION_NAME` | On-disk path and logical collection. |
+| **Chunking** | `CHUNK_SIZE`, `CHUNK_OVERLAP` | Text splitter parameters; affects chunk count and context granularity. |
+| **Retrieval defaults** | `TOP_K_RESULTS`, `RELEVANCE_THRESHOLD`, `ENABLE_FALLBACK_RETRIEVAL`, `FALLBACK_TOP_N`, `KEYWORD_RERANK_WEIGHT` | Global defaults; per-request `top_k` overrides for query. |
+| **Ingest** | `MAX_FILE_SIZE_MB`, `ARXIV_BASE_URL` | Upload cap and arXiv PDF export host. |
+| **Sample corpus** | `SAMPLE_CORPUS_VERSION` | Bump to purge and re-seed all `sample_*` docs on startup. |
+| **Network** | `CORS_ORIGINS`, `CORS_ALLOW_ALL`, `TRUSTED_HOSTS` | Browser and Host-header policy. |
+| **App** | `APP_ENV`, `DISABLE_OPENAPI` | Environment label; docs toggle. |
+| **Security / transport** | `API_KEY`, `ENABLE_RESPONSE_GZIP` | Optional API key gate; gzip responses. |
+| **Logging** | `LOG_LEVEL`, `LOG_JSON` | Verbosity and JSON log lines. |
+| **FLARE** | `FLARE_ACTIVE_RETRIEVAL`, `FLARE_DRAFT_MAX_CONTEXT_CHARS` | Global FLARE default and draft context budget. |
+
+---
+
+## 11. Security middleware
+
+Applied in `app/main.py` (order matters for FastAPI / Starlette):
+
+- **CORS** — `CORSMiddleware` with explicit origins or wildcard when `CORS_ALLOW_ALL` (dev-only).  
+- **Trusted hosts** — Optional `TrustedHostMiddleware` when `TRUSTED_HOSTS` is set.  
+- **Gzip** — `GZipMiddleware` when `ENABLE_RESPONSE_GZIP` and payload exceeds minimum size.  
+- **Per-request** — `X-Request-ID` assignment, optional API key gate, default security headers (`X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`; `Permissions-Policy` in production `APP_ENV`).  
+- **Errors** — `HTTPException` and `RequestValidationError` return structured JSON; uncaught exceptions return **500** with `request_id` in body.
+
+---
+
+## 12. Observability and reliability
+
+- **Request correlation** — Every response carries `X-Request-ID`; access logs include `request_id`, method, path, status, `duration_ms`.  
+- **Structured logs** — `LOG_JSON=true` for log platforms.  
+- **Healthchecks** — Docker Compose defines an HTTP probe against `/health/live` (see `docker-compose.yml`). Prefer `/health/ready` for LB routing when Ollama and Chroma must be live.
+
+---
+
+## 13. Deployment
+
+| Target | Command / notes |
+|--------|------------------|
+| **Docker Compose** | `docker compose up --build` — publishes **8001**, mounts Chroma volume `chroma_data`, read-only `./data`. Set `OLLAMA_BASE_URL` to reachable Ollama (default `host.docker.internal:11434` on Docker Desktop). |
+| **Bare metal / VM** | `uvicorn app.main:app --host 0.0.0.0 --port 8001` (add `--proxy-headers` behind TLS terminator per your platform). |
+| **Windows dev** | `.\start_documind.ps1` (Ollama, API, Next); `-SkipModelPull` for repeat boots. `.\stop_documind.ps1` clears ports **3002**, **8001**, **11434** — confirm Ollama shutdown is intended. |
+
+**Backup:** Copy `CHROMA_PERSIST_DIR` regularly; it is the authoritative index. Source PDFs/DOCX should remain in object storage or VCS-independent archives if they are not all under `data/`.
+
+---
+
+## 14. Bundled corpus and scripts
+
+- **`data/sample_docs/`** — Approximately **460** UTF-8 technical briefs: curated landmark-style summaries plus **400** deterministic synthetic papers `sample_corpus_p7_*.txt` generated by `scripts/generate_production_corpus.py`. Expect on the order of **5k–10k** chunks at default `CHUNK_SIZE=800` after full ingest.  
+- **Regeneration:** `python scripts/generate_production_corpus.py --count 500 --force` then bump `SAMPLE_CORPUS_VERSION` again so startup purges old `sample_*` rows.  
+- **Hand-authored expansion:** `scripts/materialize_institutional_corpus.py` adds named institutional-style briefs (skips existing filenames).  
+- **arXiv bulk:** `scripts/bulk_ingest_arxiv.py` + `data/arxiv_seed_list.txt`.
+
+---
+
+## 15. Testing
 
 ```bash
 pytest -q
 ```
 
-Additional fixtures: `evaluation/test_cases.json` and `evaluation/test_rag_pipeline.py` for regression on evaluation shape.
+`tests/conftest.py` overrides FastAPI dependencies with fake embedding/RAG services so unit tests do not require Ollama or Chroma. Integration-style tests that hit real routes still use those fakes unless extended.
 
 ---
 
-## Portfolio and commercial collateral
+## 16. Known limitations and extension points
 
-Material for proposals and attachments lives under **`portfolio/`**:
+Not implemented in this repository (non-exhaustive):
 
-- `portfolio/screenshots/documind-dashboard.png` — Full-page dashboard capture. Regenerate (API + web on 3002):  
-  `npx playwright@1.50.0 screenshot "http://127.0.0.1:3002/" portfolio/screenshots/documind-dashboard.png --viewport-size="1440,900" --wait-for-timeout=20000 --full-page`
-- `portfolio/Upwork_Project_Catalog_Client.html` — Fixed-price scope, milestones, acceptance criteria, market context.
-- `portfolio/DocuMind_Upwork_Catalog.html` — Short portfolio brief.
-- `portfolio/DocuMind_Upwork_Catalog.pdf` — Optional: `pip install -r scripts/portfolio_requirements.txt` then `python scripts/generate_portfolio_pdf.py`; browser print from HTML is usually higher fidelity.
+- Per-user or per-tenant **ACL** on chunks or documents.  
+- **SSO** / OIDC for the API or UI.  
+- **OCR** pipeline for low-quality scanned PDFs beyond basic text extraction.  
+- **Hosted** managed vector SaaS swap (Pinecone, Weaviate, etc.) — would replace `ChromaEmbeddingService` while preserving router contracts.  
+- **Token-level FLARE** — requires a host that exposes logprobs or an alternative uncertainty model.
 
----
-
-## Stack
-
-Python 3.11+, FastAPI, Pydantic v2, pydantic-settings, Uvicorn, ChromaDB, LangChain text splitters and `langchain_core`, Ollama (httpx / requests), Next.js 15, React 18, TypeScript, pytest. Optional Streamlit.
+Natural extensions: swap Ollama for OpenAI/Azure OpenAI behind the same `RAGService` boundary; add golden-set eval CI; wire `/health/ready` to load balancers.
 
 ---
 
-## Scope boundaries (read before hardening)
+## 17. Portfolio artifacts
 
-This repository is a **strong reference implementation** for grounded RAG, API design, and operator UX. It is **not** a complete enterprise SaaS. Out of the box it does **not** include, for example: multi-tenant row-level security on chunks, SSO, formal SOC2 evidence packs, or OCR-heavy scanned-PDF pipelines. Those are natural **phase-two** extensions behind the same retrieval contract.
+Under **`portfolio/`**: client project catalog HTML, portfolio brief HTML, optional PDF generation (`scripts/portfolio_requirements.txt`, `scripts/generate_portfolio_pdf.py`), dashboard screenshot `portfolio/screenshots/documind-dashboard.png` (regenerate with Playwright against `http://127.0.0.1:3002/` when the stack is running).
 
 ---
 
-## License and intent
+## 18. References
 
-Shipped as a **portfolio and extension baseline**: readable, demo-safe, suitable for walking engineering stakeholders from ingestion through retrieval behavior to deployment hooks.
+- Jiang et al., *Active Retrieval Augmented Generation (FLARE)*, [arXiv:2305.06983](https://arxiv.org/abs/2305.06983).  
+- FastAPI, Pydantic v2, ChromaDB, LangChain text splitters, Ollama HTTP API.
 
-For hiring and contracting contexts, DocuMind is intended to demonstrate **end-to-end ownership**: problem framing, API surface, retrieval policy, UI, and how the system behaves when dependencies fail.
+---
+
+## Stack summary
+
+Python **3.11+** (Dockerfile pins 3.11-slim), FastAPI, Uvicorn, Pydantic Settings, ChromaDB, `langchain_core` + `langchain-text-splitters`, Ollama, Next.js 15, React 18, TypeScript, pytest, optional Streamlit.
