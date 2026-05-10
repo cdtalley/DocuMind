@@ -60,7 +60,7 @@ Application services are wired through FastAPI **lifespan** hooks (singletons fo
 - **Formats** — `.pdf`, `.docx`, `.txt` upload; arXiv fetch by ID.
 - **Query modes** — `general`, `compare`, `methodology`, `datasets`, `reproduce` (see [Query modes](#query-modes)).
 - **FLARE-style active retrieval** (optional) — Second embedding search when a short **forward-looking draft** marks uncertainty (`???` or explicit excerpt-level hedges). Full [FLARE](https://arxiv.org/abs/2305.06983) uses token logprobs; Ollama chat here does not expose them, so this is a **documented, heuristic** variant. Enable with `use_flare` on `POST /api/v1/query`, UI toggle, or `FLARE_ACTIVE_RETRIEVAL=true`. **Dataset Finder** mode skips FLARE (deterministic extraction path).
-- **Bundled corpus** — `data/sample_docs/` (60+ text summaries). Indexed as `sample_*` document ids. Bump `SAMPLE_CORPUS_VERSION` in settings to purge and re-seed sample rows (requires Ollama at startup).
+- **Bundled corpus** — `data/sample_docs/` ships **~460** UTF-8 technical briefs (landmark-style summaries plus **400** reproducible `sample_corpus_p7_*.txt` synth papers from `scripts/generate_production_corpus.py`). Indexed as `sample_*` document ids; expect **on the order of 5k–10k chunks** after ingest (depends on `CHUNK_SIZE`). Bump **`SAMPLE_CORPUS_VERSION`** (now **7**) to purge and re-seed sample rows on startup (requires Ollama). Regenerate or resize: `python scripts/generate_production_corpus.py --count 500 --force`.
 - **Bulk arXiv** — `scripts/bulk_ingest_arxiv.py` with `data/arxiv_seed_list.txt` (client-side throttling).
 
 ---

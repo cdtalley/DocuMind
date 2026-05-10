@@ -111,7 +111,7 @@ const PRESET_LIBRARY: PaperCard[] = [
   {
     doc_id: "__catalog__",
     filename: "Bundled corpus",
-    title: "Bundled landmark summaries (auto-seeded when Ollama is up)",
+    title: "Bundled corpus (~460 docs, auto-seeded when Ollama is up; v7)",
     authors: "Starter KB",
     year: "",
     arxiv_id: "",

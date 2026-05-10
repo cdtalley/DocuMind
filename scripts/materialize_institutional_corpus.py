@@ -1,5 +1,9 @@
 #!/usr/bin/env python3
-"""Write additional sample_docs/*.txt for a larger bundled corpus (run from repo root)."""
+"""Write additional sample_docs/*.txt for hand-authored institutional briefs (run from repo root).
+
+For hundreds of reproducible synthetic benchmark papers at once, use instead:
+  python scripts/generate_production_corpus.py
+"""
 from __future__ import annotations
 
 from pathlib import Path

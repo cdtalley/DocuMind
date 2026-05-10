@@ -1,0 +1,23 @@
+Production Corpus Brief 00274: Neural Bandits Under Delayed Reward In Recommender Systems — extensions toward graph systems
+Synthetic Authors Collective 074
+2020
+
+Abstract
+We present empirical results on neural bandits under delayed reward in recommender systems, emphasizing reproducibility constraints, leakage-safe evaluation, and deployment considerations for regulated or high-stakes environments. We connect design choices to graph neural operators on transaction hypergraphs and report where claims are supported only by synthetic or anonymized corpora.
+
+Methodology
+Our pipeline combines standard baselines with a proposed module trained with AdamW, cosine decay, gradient clipping at one unit, and early stopping on a patience of seven epochs. Ablations remove auxiliary losses and measure degradation on held-out slices stratified by time or entity clusters. Where applicable we report confidence intervals via paired bootstrap over evaluation queries.
+
+Datasets
+Primary training and validation use NASA MODIS tiles (public); secondary stress evaluation uses LibriSpeech 960h. We enforce strict temporal splits for any time-ordered data and document any relaxed splits in appendix-style notes within this brief. Class imbalance is handled with stratified sampling and focal loss when base rates fall below five percent positives.
+
+Experiments
+We track F1 at 10% review budget as the headline metric (reported value 0.501 on the primary slice). We additionally log latency p95, GPU memory residency, and failure cases where retrieval or OCR quality limits conclusions. Hyperparameters include batch sizes in {32, 64, 128}, learning rates in the interval [1e-5, 3e-4], and weight decay in [0.01, 0.1] unless otherwise noted for stability.
+
+Results
+The proposed approach improves F1 at 10% review budget versus the strongest baseline in seven of twelve configuration cells, with largest gains when auxiliary metadata is available. Gains shrink under covariate shift between train and validation vintages; we highlight segments where the model reverts to safe abstention. Error analysis shows confusion between near-duplicate entity strings and sensitivity to long-tail vocabulary introduced after the training cutoff.
+
+Conclusion and limitations
+We summarize practical takeaways for engineering teams integrating similar models behind retrieval layers: maintain provenance on chunks, monitor embedding drift weekly, and budget for periodic re-embedding after material vocabulary shift. This document is synthetic and intended for retrieval benchmarking only; it must not be cited as peer-reviewed literature.
+
+Keywords: neural_bandits_under_delayed_reward_in_recommender_systems, benchmarking, retrieval, evaluation, synthetic brief id-00274
