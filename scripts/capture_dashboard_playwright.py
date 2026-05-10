@@ -7,6 +7,9 @@ Viewport capture uses a fixed height cap (default 3200px) and scrolls the synthe
 Never trust documentElement.scrollHeight for screenshots — long Markdown answers can exceed 90kpx and
 produce an unusable vertical strip when scaled down.
 
+The default 1000×750 catalog thumb is a Sentinel-style typography tile (no scaled UI); use
+--plain-catalog-thumb for a simple top-crop from the dashboard PNG.
+
 First boot after SAMPLE_CORPUS_VERSION bump can take a long time (many embeds). Use --min-docs lower for a smaller
 corpus, or raise --wait-index-ms for a full v7 seed.
 """
@@ -28,7 +31,12 @@ DEFAULT_OUT = ROOT / "portfolio" / "screenshots" / "documind-dashboard.png"
 DEFAULT_THUMB_OUT = ROOT / "portfolio" / "screenshots" / "documind-upwork-catalog-1000x750.png"
 
 
-def write_catalog_thumbnail(src: Path, dst: Path, *, plain: bool) -> None:
+def write_catalog_thumbnail(
+    src: Path,
+    dst: Path,
+    *,
+    plain: bool,
+) -> None:
     if plain:
         write_plain_top_crop_thumbnail(src, dst)
     else:
@@ -75,6 +83,12 @@ def main() -> int:
         help="Capture the entire scrollable page (can be 50k+ px tall with long answers — poor for portfolios).",
     )
     parser.add_argument(
+        "--viewport-width",
+        type=int,
+        default=1680,
+        help="Browser viewport width for capture (default 1680 — sharper portfolio thumbs than 1440).",
+    )
+    parser.add_argument(
         "--viewport-height",
         type=int,
         default=3200,
@@ -99,7 +113,7 @@ def main() -> int:
     parser.add_argument(
         "--plain-catalog-thumb",
         action="store_true",
-        help="Simple 4:3 top-crop instead of the branded attention layout (A/B or strict minimalism).",
+        help="Simple 4:3 top-crop from the dashboard PNG instead of the default Sentinel-style tile.",
     )
     args = parser.parse_args()
 
@@ -128,7 +142,11 @@ def main() -> int:
             print("--thumb-only conflicts with --no-thumb", file=sys.stderr)
             return 1
         try:
-            write_catalog_thumbnail(args.out, args.thumb_out, plain=args.plain_catalog_thumb)
+            write_catalog_thumbnail(
+                args.out,
+                args.thumb_out,
+                plain=args.plain_catalog_thumb,
+            )
         except (OSError, ValueError, RuntimeError) as exc:
             print(str(exc), file=sys.stderr)
             return 1
@@ -147,8 +165,9 @@ def main() -> int:
     """
 
     with sync_playwright() as p:
+        vw = max(1024, min(int(args.viewport_width), 1920))
         browser = p.chromium.launch(headless=True)
-        page = browser.new_page(viewport={"width": 1440, "height": 900})
+        page = browser.new_page(viewport={"width": vw, "height": 900})
         page.goto(args.url, wait_until="domcontentloaded", timeout=120_000)
         page.wait_for_function(js, timeout=args.wait_index_ms)
         page.get_by_role("button", name="Refresh status").click()
@@ -187,7 +206,7 @@ def main() -> int:
             page.screenshot(path=str(args.out), full_page=True)
         else:
             vh = max(900, min(int(args.viewport_height), 4096))
-            page.set_viewport_size({"width": 1440, "height": vh})
+            page.set_viewport_size({"width": vw, "height": vh})
             page.wait_for_timeout(350)
             page.screenshot(path=str(args.out), full_page=False)
 
@@ -203,8 +222,12 @@ def main() -> int:
             )
         else:
             try:
-                write_catalog_thumbnail(args.out, args.thumb_out, plain=args.plain_catalog_thumb)
-                kind = "plain 4:3" if args.plain_catalog_thumb else "branded attention 4:3"
+                write_catalog_thumbnail(
+                    args.out,
+                    args.thumb_out,
+                    plain=args.plain_catalog_thumb,
+                )
+                kind = "plain 4:3" if args.plain_catalog_thumb else "Sentinel-style 4:3"
                 print(f"Wrote {args.thumb_out} (Upwork catalog — {kind})")
             except (OSError, ValueError, RuntimeError) as exc:
                 print(str(exc), file=sys.stderr)

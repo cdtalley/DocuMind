@@ -1,7 +1,7 @@
 """
-1000×750 (4:3) catalog image: short stack summary + cropped live UI from dashboard PNG.
+1000×750 Upwork tile — Sentinel-style infographic (no scaled screenshots).
 
-Upwork suggests ~1000×750 for Project Catalog tiles; this keeps text factual and the UI legible.
+Dark navy grid, cyan corner glow, bold title + stack line, 2×2 metric cards, bottom tech pills.
 """
 from __future__ import annotations
 
@@ -11,118 +11,148 @@ from pathlib import Path
 from PIL import Image, ImageDraw, ImageFont
 
 
+W, H = 1000, 750
+BG = (10, 16, 32)
+GRID = (22, 34, 56)
+ACCENT = (34, 211, 238)
+ACCENT_SOFT = (125, 211, 252)
+CARD_BG = (16, 26, 46)
+CARD_EDGE = (48, 62, 88)
+LABEL_GRAY = (148, 163, 184)
+WHITE = (255, 255, 255)
+
+
 def _windows_font(name: str) -> Path | None:
     windir = os.environ.get("WINDIR", "C:/Windows")
     p = Path(windir) / "Fonts" / name
     return p if p.is_file() else None
 
 
-def _load_fonts() -> tuple[ImageFont.FreeTypeFont | ImageFont.ImageFont, ...]:
-    title_p = _windows_font("segoeuib.ttf") or _windows_font("arialbd.ttf")
-    body_p = _windows_font("segoeui.ttf") or _windows_font("arial.ttf")
+def _sentinel_fonts() -> dict[str, ImageFont.FreeTypeFont | ImageFont.ImageFont]:
+    bold = _windows_font("segoeuib.ttf") or _windows_font("arialbd.ttf")
+    reg = _windows_font("segoeui.ttf") or _windows_font("arial.ttf")
     try:
-        if title_p and body_p:
-            return (
-                ImageFont.truetype(str(title_p), 40),
-                ImageFont.truetype(str(body_p), 18),
-                ImageFont.truetype(str(body_p), 16),
-                ImageFont.truetype(str(title_p), 12),
-            )
+        if bold and reg:
+            return {
+                "kicker": ImageFont.truetype(str(bold), 12),
+                "title": ImageFont.truetype(str(bold), 40),
+                "stack_line": ImageFont.truetype(str(reg), 16),
+                "metric_val": ImageFont.truetype(str(bold), 34),
+                "metric_lbl": ImageFont.truetype(str(bold), 11),
+                "pill": ImageFont.truetype(str(reg), 13),
+            }
     except OSError:
         pass
     d = ImageFont.load_default()
-    return (d, d, d, d)
+    return {k: d for k in ("kicker", "title", "stack_line", "metric_val", "metric_lbl", "pill")}
 
 
-def _rounded_mask(size: tuple[int, int], radius: int) -> Image.Image:
-    w, h = size
-    mask = Image.new("L", (w, h), 0)
-    dr = ImageDraw.Draw(mask)
-    dr.rounded_rectangle((0, 0, w, h), radius=radius, fill=255)
-    return mask
+def _draw_subtle_grid(draw: ImageDraw.ImageDraw, width: int, height: int, step: int = 44) -> None:
+    for x in range(0, width + 1, step):
+        draw.line((x, 0, x, height), fill=GRID, width=1)
+    for y in range(0, height + 1, step):
+        draw.line((0, y, width, y), fill=GRID, width=1)
 
 
-def render_catalog_thumbnail(master_png: Path, out_png: Path) -> None:
-    """Composite 1000×750 catalog/portfolio thumbnail from master dashboard PNG."""
-    Image.MAX_IMAGE_PIXELS = 200_000_000
+def _composite_corner_glow(base_rgba: Image.Image) -> Image.Image:
+    w, h = base_rgba.size
+    glow = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+    gd = ImageDraw.Draw(glow)
+    cx, cy = w - 72, h - 64
+    for r, a in (
+        (420, 5),
+        (340, 7),
+        (270, 9),
+        (200, 11),
+        (140, 13),
+        (90, 12),
+        (55, 9),
+    ):
+        gd.ellipse((cx - r, cy - r, cx + r, cy + r), fill=(*ACCENT, a))
+    return Image.alpha_composite(base_rgba, glow)
 
-    master = Image.open(master_png).convert("RGB")
-    mw, mh = master.size
-    if mw < 400 or mh < 400:
-        raise ValueError(f"Master too small: {mw}×{mh}")
 
-    W, H = 1000, 750
-    LEFT_W = 292
-    RIGHT_W = W - LEFT_W
-    radius = 16
-    pad = (6, 10, 22)
+def _draw_metric_card(
+    draw: ImageDraw.ImageDraw,
+    x: int,
+    y: int,
+    cw: int,
+    ch: int,
+    value: str,
+    label: str,
+    fonts: dict[str, ImageFont.ImageFont],
+) -> None:
+    draw.rounded_rectangle((x, y, x + cw, y + ch), radius=10, fill=CARD_BG, outline=CARD_EDGE, width=1)
+    draw.text((x + 20, y + 22), value, fill=WHITE, font=fonts["metric_val"])
+    draw.text((x + 20, y + 78), label.upper(), fill=LABEL_GRAY, font=fonts["metric_lbl"])
 
-    canvas = Image.new("RGB", (W, H), pad)
-    draw = ImageDraw.Draw(canvas)
 
-    # Left gradient panel
-    left = Image.new("RGB", (LEFT_W, H))
-    ld = ImageDraw.Draw(left)
-    for y in range(H):
-        t = y / max(H - 1, 1)
-        r = int(3 + t * 22)
-        g = int(10 + t * 40)
-        b = int(26 + t * 58)
-        ld.line([(0, y), (LEFT_W, y)], fill=(r, g, b))
+def _draw_pill_row(
+    draw: ImageDraw.ImageDraw,
+    tags: list[str],
+    font: ImageFont.ImageFont,
+    x0: int,
+    y0: int,
+    gap: int = 10,
+) -> None:
+    x = x0
+    for tag in tags:
+        bbox = draw.textbbox((0, 0), tag, font=font)
+        tw, th = bbox[2] - bbox[0], bbox[3] - bbox[1]
+        pw, ph = tw + 22, max(28, th + 14)
+        draw.rounded_rectangle((x, y0, x + pw, y0 + ph), radius=14, fill=(12, 22, 40), outline=ACCENT, width=1)
+        draw.text((x + 11, y0 + (ph - th) // 2 - 1), tag, fill=ACCENT_SOFT, font=font)
+        x += pw + gap
 
-    ft_title, ft_sub, ft_li, ft_badge = _load_fonts()
-    ld.text((24, 36), "DocuMind", fill=(248, 250, 252), font=ft_title)
-    ld.text((24, 100), "RAG over a paper library", fill=(125, 211, 252), font=ft_sub)
 
-    bullets = [
-        "PDF / DOCX / TXT ingest",
-        "Chroma + Ollama",
-        "FastAPI + OpenAPI",
-        "Answer + source cards",
-    ]
-    yb = 152
-    for i, b in enumerate(bullets):
-        ld.text((24, yb + i * 28), "· " + b, fill=(203, 213, 225), font=ft_li)
+def render_documind_sentinel_tile(out_png: Path) -> None:
+    """Typography-led catalog tile matching SentinelAI reference (readable at grid size)."""
+    fonts = _sentinel_fonts()
+    base = Image.new("RGBA", (W, H), (*BG, 255))
+    draw = ImageDraw.Draw(base)
+    _draw_subtle_grid(draw, W, H)
+    base = _composite_corner_glow(base)
+    draw = ImageDraw.Draw(base)
 
-    pill = (24, H - 88, 24 + 178, H - 54)
-    ld.rounded_rectangle(pill, radius=10, fill=(22, 101, 52))
-    ld.text((36, H - 82), "LOCAL BY DEFAULT", fill=(187, 247, 208), font=ft_badge)
+    margin_l = 40
+    y = 28
+    draw.text((margin_l, y), "REFERENCE STACK", fill=ACCENT, font=fonts["kicker"])
+    y += 26
 
-    canvas.paste(left, (0, 0))
+    t1 = "DocuMind — "
+    t2 = "Vector research console"
+    draw.text((margin_l, y), t1, fill=WHITE, font=fonts["title"])
+    b1 = draw.textbbox((margin_l, y), t1, font=fonts["title"])
+    draw.text((b1[2], y), t2, fill=ACCENT, font=fonts["title"])
 
-    # Right: "cover" zoom on main column — drop narrow sidebar, cap vertical slab so synthesis/UI scale up.
-    x0 = min(int(mw * 0.19), 340)
-    slab_h = min(mh, 2200)
-    slab = master.crop((x0, 0, mw, slab_h))
-    sw_, sh_ = slab.size
-    scale = max(RIGHT_W / sw_, H / sh_)
-    nw, nh = max(1, int(sw_ * scale)), max(1, int(sh_ * scale))
-    big = slab.resize((nw, nh), Image.Resampling.LANCZOS)
-    left_px = max(0, (nw - RIGHT_W) // 2)
-    top_px = max(0, (nh - H) // 2)
-    panel_rgb = big.crop((left_px, top_px, left_px + RIGHT_W, top_px + H))
+    stack = "FastAPI · Chroma · hybrid retrieval · Markdown synthesis · Next.js console · Docker"
+    y += 52
+    draw.text((margin_l, y), stack, fill=LABEL_GRAY, font=fonts["stack_line"])
 
-    bd = ImageDraw.Draw(panel_rgb)
-    bd.rounded_rectangle((1, 1, RIGHT_W - 2, H - 2), radius=radius, outline=(45, 212, 191), width=2)
+    # 2×2 cards (left block)
+    y_cards = 198
+    cw, ch = 228, 118
+    gap = 14
+    _draw_metric_card(draw, margin_l, y_cards, cw, ch, "400+", "indexed docs", fonts)
+    _draw_metric_card(draw, margin_l + cw + gap, y_cards, cw, ch, "Hybrid", "dense + sparse", fonts)
+    _draw_metric_card(draw, margin_l, y_cards + ch + gap, cw, ch, "MD", "synthesis output", fonts)
+    _draw_metric_card(draw, margin_l + cw + gap, y_cards + ch + gap, cw, ch, "REST", "/rag · /health", fonts)
 
-    mask = _rounded_mask((RIGHT_W, H), radius)
-    panel_rgba = panel_rgb.convert("RGBA")
-    panel_rgba.putalpha(mask)
+    pills = ["FastAPI", "Chroma", "Ollama", "Next.js", "Docker", "Playwright"]
+    _draw_pill_row(draw, pills, fonts["pill"], margin_l, H - 56, gap=10)
 
-    canvas_rgba = canvas.convert("RGBA")
-    canvas_rgba.paste(panel_rgba, (LEFT_W, 0), panel_rgba)
-    out = canvas_rgba.convert("RGB")
-
-    fd = ImageDraw.Draw(out)
-    for i in range(4):
-        fd.line([(LEFT_W + i, 32), (LEFT_W + i, H - 32)], fill=(14 + i * 18, 116 + i * 8, 160 + i * 6), width=1)
+    draw.rectangle((0, H - 3, W, H), fill=ACCENT)
 
     out_png.parent.mkdir(parents=True, exist_ok=True)
-    out.save(out_png, "PNG", optimize=True)
+    base.convert("RGB").save(out_png, "PNG", optimize=True)
+
+
+def render_catalog_thumbnail(_master: Path, out_png: Path) -> None:
+    """Composite Upwork tile (Sentinel-style infographic; master path unused)."""
+    render_documind_sentinel_tile(out_png)
 
 
 def write_plain_top_crop_thumbnail(src: Path, dst: Path, width: int = 1000, height: int = 750) -> None:
-    """Simple 4:3 top-crop (legacy plain resize)."""
     Image.MAX_IMAGE_PIXELS = 200_000_000
     im = Image.open(src).convert("RGB")
     sw, sh = im.size
@@ -144,13 +174,15 @@ def write_plain_top_crop_thumbnail(src: Path, dst: Path, width: int = 1000, heig
 if __name__ == "__main__":
     import argparse
 
-    ap = argparse.ArgumentParser(description="Build 1000×750 catalog thumbnail from dashboard PNG")
-    ap.add_argument("--src", type=Path, required=True)
+    ap = argparse.ArgumentParser(description="Build 1000×750 catalog thumbnail (Sentinel-style or plain crop)")
     ap.add_argument("--out", type=Path, required=True)
-    ap.add_argument("--plain", action="store_true", help="Plain top-crop only (no branded rail)")
+    ap.add_argument("--plain", action="store_true", help="Top-crop from dashboard PNG instead")
+    ap.add_argument("--src", type=Path, help="Dashboard PNG (required with --plain)")
     ns = ap.parse_args()
     if ns.plain:
+        if not ns.src:
+            ap.error("--plain requires --src")
         write_plain_top_crop_thumbnail(ns.src, ns.out)
     else:
-        render_catalog_thumbnail(ns.src, ns.out)
+        render_documind_sentinel_tile(ns.out)
     print(f"Wrote {ns.out}")
