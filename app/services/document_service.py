@@ -6,7 +6,7 @@ from pathlib import Path
 
 from PyPDF2 import PdfReader
 from docx import Document as DocxDocument
-from langchain.schema import Document
+from langchain_core.documents import Document
 
 from app.utils.chunker import DocumentChunker
 

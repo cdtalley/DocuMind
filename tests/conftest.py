@@ -4,7 +4,7 @@ from collections import defaultdict
 
 import pytest
 from fastapi.testclient import TestClient
-from langchain.schema import Document
+from langchain_core.documents import Document
 
 from app.main import app, get_document_service, get_embedding_service, get_ollama_client, get_rag_service
 from app.models.response_models import AnswerResponse

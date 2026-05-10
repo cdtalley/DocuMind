@@ -8,7 +8,7 @@ from typing import Any
 os.environ.setdefault("ANONYMIZED_TELEMETRY", "False")
 
 import chromadb
-from langchain.schema import Document
+from langchain_core.documents import Document
 
 from app.utils.ollama_client import OllamaClient
 

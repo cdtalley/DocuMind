@@ -110,14 +110,17 @@ You’ll want Python 3.11+, Node 18+, Ollama installed, and enough RAM that `lla
 
 ## Manual setup without the scripts
 
+Use a **project virtualenv** (`.venv`) so dependencies match LangChain 1.x (`langchain_core.documents.Document`). If you run `uvicorn` with a random system Python, imports can fail in non-obvious ways.
+
 Backend:
 
 ```bash
-pip install -r requirements.txt
+python -m venv .venv
+.\.venv\Scripts\pip install -r requirements.txt   # Windows; on macOS/Linux: source .venv/bin/activate && pip install ...
 cp .env.example .env
 ollama pull llama3
 ollama pull nomic-embed-text
-uvicorn app.main:app --host 127.0.0.1 --port 8001 --reload
+.\.venv\Scripts\python -m uvicorn app.main:app --host 127.0.0.1 --port 8001 --reload
 ```
 
 API: `http://127.0.0.1:8001` — docs at `/docs`.
