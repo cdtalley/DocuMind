@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class SourceCitation(BaseModel):
@@ -22,6 +22,11 @@ class AnswerResponse(BaseModel):
     query_mode: str
     model_used: str
     chunks_searched: int
+    flare_enabled: bool = False
+    flare_followup_retrieval: bool = Field(
+        default=False,
+        description="True when a second retrieval pass ran (draft indicated missing or uncertain evidence).",
+    )
 
 
 class PaperCard(BaseModel):

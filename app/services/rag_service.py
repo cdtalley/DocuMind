@@ -1,10 +1,13 @@
 from __future__ import annotations
 
+import logging
 import re
 
 from app.models.response_models import AnswerResponse, SourceCitation
 from app.services.embedding_service import ChromaEmbeddingService
 from app.utils.ollama_client import OllamaClient
+
+logger = logging.getLogger("documind.rag")
 
 # Substrings matched in lowercased chunk text for structured dataset extraction (datasets mode).
 KNOWN_DATASET_HINTS: frozenset[str] = frozenset(
@@ -139,6 +142,35 @@ SYSTEM_PROMPTS = {
     ),
 }
 
+# Forward-looking active retrieval (FLARE, Jiang et al. EMNLP 2023). Full FLARE uses token-level
+# confidence; local Ollama chat does not expose logprobs, so we use explicit uncertainty markers
+# (???) and phrase hedges in a short draft to decide on a second retrieval pass.
+FLARE_DRAFT_SYSTEM = (
+    "You simulate the next sentences an expert would write while answering the user. "
+    "This preview is used ONLY to decide whether more library search is needed.\n"
+    "Rules:\n"
+    "- Use ONLY information implied by the short excerpt previews below.\n"
+    "- Write 2-4 sentences of plain prose (no markdown headers, no bullet lists).\n"
+    "- Where the previews do not support a concrete fact, write the exact marker ??? instead of guessing.\n"
+    "- If everything needed is already clear, write a confident continuation with no ???.\n"
+)
+
+
+def flare_triggers_follow_up(draft: str) -> bool:
+    if "???" in draft:
+        return True
+    d = draft.lower()
+    phrases = (
+        "not stated in excerpt",
+        "not mentioned in excerpt",
+        "cannot determine from",
+        "unclear from the excerpt",
+        "unknown in excerpt",
+        "no evidence in excerpt",
+        "not in the excerpt",
+    )
+    return any(p in d for p in phrases)
+
 
 class RAGService:
     def __init__(
@@ -147,6 +179,105 @@ class RAGService:
         self.embedding_service = embedding_service
         self.ollama_client = ollama_client
         self.settings = settings
+
+    @staticmethod
+    def _chunk_identity(item: dict) -> tuple:
+        md = item.get("metadata") or {}
+        doc = str(md.get("doc_id", ""))
+        try:
+            ci = int(md.get("chunk_index", -1) or -1)
+        except (TypeError, ValueError):
+            ci = -1
+        if doc and ci >= 0:
+            return ("chunk", doc, ci)
+        return ("hash", hash((item.get("content") or "")[:240]))
+
+    def _retrieve_k_budget(self, top_k: int, query_mode: str) -> int:
+        if query_mode in ("compare", "general"):
+            return min(64, max(top_k * 4, 20))
+        if query_mode in ("datasets", "reproduce", "methodology"):
+            return min(56, max(top_k * 3, 16))
+        return min(64, max(top_k * 4, 20))
+
+    def _context_slots_budget(self, top_k: int, query_mode: str) -> int:
+        if query_mode in ("general", "compare"):
+            return min(24, top_k + 6)
+        if query_mode in ("methodology", "reproduce"):
+            return min(22, top_k + 4)
+        return min(24, top_k + 6)
+
+    def _search_rerank(
+        self,
+        embed_query: str,
+        overlap_query: str,
+        top_k: int,
+        query_mode: str,
+        section_filter: str | None,
+    ) -> list[dict]:
+        retrieve_k = self._retrieve_k_budget(top_k, query_mode)
+        results = self.embedding_service.search(embed_query, retrieve_k, section_filter)
+        w = self.settings.KEYWORD_RERANK_WEIGHT
+        return sorted(
+            results,
+            key=lambda item: item["distance"] - (w * self._keyword_overlap_score(overlap_query, item["content"])),
+        )
+
+    def _pick_context_from_reranked(
+        self, reranked: list[dict], overlap_query: str, query_mode: str, top_k: int
+    ) -> tuple[list[dict], bool]:
+        filtered = [item for item in reranked if item["distance"] < self.settings.RELEVANCE_THRESHOLD]
+        used_fallback = False
+        if not filtered and reranked and self.settings.ENABLE_FALLBACK_RETRIEVAL:
+            filtered = reranked[: min(self.settings.FALLBACK_TOP_N, len(reranked))]
+            used_fallback = True
+        slots = self._context_slots_budget(top_k, query_mode)
+        filtered = self._select_diverse_sources(filtered, max_items=slots, prefer_unique_doc=True)
+        return filtered, used_fallback
+
+    def _merge_reranked_passes(self, rer_a: list[dict], rer_b: list[dict], overlap_query: str) -> list[dict]:
+        best: dict[tuple, dict] = {}
+        for item in rer_a + rer_b:
+            k = self._chunk_identity(item)
+            cur = best.get(k)
+            if cur is None or float(item["distance"]) < float(cur["distance"]):
+                best[k] = item
+        merged = list(best.values())
+        w = self.settings.KEYWORD_RERANK_WEIGHT
+        return sorted(
+            merged,
+            key=lambda item: item["distance"] - (w * self._keyword_overlap_score(overlap_query, item["content"])),
+        )
+
+    def _flare_mini_context(self, filtered: list[dict]) -> str:
+        budget = max(400, self.settings.FLARE_DRAFT_MAX_CONTEXT_CHARS)
+        parts: list[str] = []
+        used = 0
+        for i, item in enumerate(filtered):
+            md = item.get("metadata") or {}
+            title = md.get("title", "Unknown")
+            sec = md.get("section", "body")
+            snippet = (item.get("content") or "").strip()
+            block = f"[{i + 1}] {title} ({sec})\n{snippet}\n\n"
+            if used + len(block) > budget:
+                remain = budget - used - 50
+                if remain > 120:
+                    parts.append(f"[{i + 1}] {title} ({sec})\n{snippet[:remain]}...\n\n")
+                break
+            parts.append(block)
+            used += len(block)
+        return "".join(parts).strip()
+
+    def _flare_forward_looking_draft(self, user_query: str, mini_context: str) -> str:
+        user_message = (
+            f"User question:\n{user_query}\n\n"
+            f"Excerpt previews from the current retrieval pass:\n{mini_context}\n\n"
+            "Write the forward-looking preview now."
+        )
+        messages = [
+            {"role": "system", "content": FLARE_DRAFT_SYSTEM},
+            {"role": "user", "content": user_message},
+        ]
+        return self.ollama_client.chat(messages, temperature=0.12)
 
     @staticmethod
     def _keyword_overlap_score(query: str, content: str) -> float:
@@ -241,32 +372,37 @@ class RAGService:
         return results
 
     def answer(
-        self, query: str, top_k: int, query_mode: str = "general", section_filter: str | None = None
+        self,
+        query: str,
+        top_k: int,
+        query_mode: str = "general",
+        section_filter: str | None = None,
+        use_flare: bool = False,
     ) -> AnswerResponse:
-        retrieve_k = top_k
-        if query_mode in ("compare", "general"):
-            retrieve_k = min(64, max(top_k * 4, 20))
-        elif query_mode in ("datasets", "reproduce", "methodology"):
-            retrieve_k = min(56, max(top_k * 3, 16))
+        """Retrieve, optionally merge FLARE follow-up pass, then answer (or dataset inventory)."""
+        flare_on = bool(use_flare or self.settings.FLARE_ACTIVE_RETRIEVAL)
+        flare_follow_up = False
+        rer1 = self._search_rerank(query, query, top_k, query_mode, section_filter)
+        filtered, used_fallback = self._pick_context_from_reranked(rer1, query, query_mode, top_k)
+        chunks_searched = len(rer1)
 
-        results = self.embedding_service.search(query, retrieve_k, section_filter)
-        reranked = sorted(
-            results,
-            key=lambda item: item["distance"]
-            - (self.settings.KEYWORD_RERANK_WEIGHT * self._keyword_overlap_score(query, item["content"])),
-        )
-        filtered = [item for item in reranked if item["distance"] < self.settings.RELEVANCE_THRESHOLD]
-        used_fallback = False
-        if not filtered and reranked and self.settings.ENABLE_FALLBACK_RETRIEVAL:
-            # Fallback keeps demo and low-volume collections usable when distance scales vary by model/index.
-            filtered = reranked[: min(self.settings.FALLBACK_TOP_N, len(reranked))]
-            used_fallback = True
-        context_slots = top_k
-        if query_mode in ("general", "compare"):
-            context_slots = min(24, top_k + 6)
-        elif query_mode in ("methodology", "reproduce"):
-            context_slots = min(22, top_k + 4)
-        filtered = self._select_diverse_sources(filtered, max_items=context_slots, prefer_unique_doc=True)
+        if flare_on and query_mode != "datasets" and filtered:
+            mini = self._flare_mini_context(filtered)
+            if mini:
+                try:
+                    draft = self._flare_forward_looking_draft(query, mini)
+                except Exception as exc:
+                    logger.warning("FLARE draft call failed; continuing with single pass: %s", exc)
+                    draft = ""
+                if draft.strip() and flare_triggers_follow_up(draft):
+                    follow_q = (
+                        f"{query.strip()}\n\nRetrieval focus from model lookahead:\n{draft.strip()}"[:2000]
+                    )
+                    rer2 = self._search_rerank(follow_q, query, top_k, query_mode, section_filter)
+                    merged = self._merge_reranked_passes(rer1, rer2, query)
+                    filtered, used_fallback = self._pick_context_from_reranked(merged, query, query_mode, top_k)
+                    flare_follow_up = True
+                    chunks_searched = len(rer1) + len(rer2)
 
         if not filtered:
             return AnswerResponse(
@@ -280,7 +416,9 @@ class RAGService:
                 query=query,
                 model_used=self.settings.LLM_MODEL,
                 query_mode=query_mode,
-                chunks_searched=len(reranked),
+                chunks_searched=chunks_searched,
+                flare_enabled=flare_on,
+                flare_followup_retrieval=flare_follow_up,
             )
 
         if query_mode == "datasets":
@@ -362,5 +500,7 @@ class RAGService:
             query=query,
             query_mode=query_mode,
             model_used=self.settings.LLM_MODEL,
-            chunks_searched=len(reranked),
+            chunks_searched=chunks_searched,
+            flare_enabled=flare_on,
+            flare_followup_retrieval=flare_follow_up,
         )

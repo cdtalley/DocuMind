@@ -103,6 +103,8 @@ type QueryResponse = {
   query_mode?: string;
   chunks_searched?: number;
   model_used?: string;
+  flare_enabled?: boolean;
+  flare_followup_retrieval?: boolean;
 };
 
 const PRESET_LIBRARY: PaperCard[] = [
@@ -186,6 +188,8 @@ export default function HomePage() {
   const [mode, setMode] = useState(DEFAULT_SCENARIO.mode);
   const [section, setSection] = useState(DEFAULT_SCENARIO.section);
   const [topK, setTopK] = useState(DEFAULT_SCENARIO.topK);
+  const [useFlare, setUseFlare] = useState(false);
+  const [flareFollowUp, setFlareFollowUp] = useState(false);
   const [answer, setAnswer] = useState("");
   const [sources, setSources] = useState<Source[]>([]);
   const [confidence, setConfidence] = useState(0);
@@ -260,7 +264,8 @@ export default function HomePage() {
           query,
           top_k: topK,
           query_mode: mode,
-          section_filter: section === "All Sections" ? null : section
+          section_filter: section === "All Sections" ? null : section,
+          use_flare: useFlare
         })
       });
       setAnswer(data.answer);
@@ -269,13 +274,14 @@ export default function HomePage() {
       setHasAnswer(data.has_answer !== false);
       setChunksSearched(typeof data.chunks_searched === "number" ? data.chunks_searched : null);
       setModelUsed(typeof data.model_used === "string" ? data.model_used : null);
+      setFlareFollowUp(data.flare_followup_retrieval === true);
     } catch (error) {
       setNotice(error instanceof Error ? error.message : "Query failed");
       setNoticeTone("error");
     } finally {
       setLoading(false);
     }
-  }, [query, topK, mode, section]);
+  }, [query, topK, mode, section, useFlare]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -557,6 +563,21 @@ export default function HomePage() {
                 onChange={(e) => setTopK(Number(e.target.value))}
               />
             </div>
+            <div style={{ gridColumn: "1 / span 2" }}>
+              <label className="flare-check">
+                <input
+                  id="use-flare"
+                  name="use_flare"
+                  type="checkbox"
+                  checked={useFlare}
+                  onChange={(e) => setUseFlare(e.target.checked)}
+                  disabled={mode === "datasets"}
+                />
+                <span>
+                  FLARE-style active retrieval (extra draft + possible second search). Off for Dataset Finder mode.
+                </span>
+              </label>
+            </div>
             <div style={{ alignSelf: "end" }}>
               <button type="submit" disabled={loading}>
                 {loading ? "Running…" : "Submit"}
@@ -592,6 +613,11 @@ export default function HomePage() {
                   <span className="answer-meta-pill answer-meta-pill--muted">
                     Citations <strong>{sources.length}</strong>
                   </span>
+                  {flareFollowUp ? (
+                    <span className="answer-meta-pill" title="Second embedding search merged after forward-looking draft">
+                      FLARE <strong>2nd pass</strong>
+                    </span>
+                  ) : null}
                 </div>
               </div>
 

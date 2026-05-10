@@ -67,7 +67,14 @@ class FakeRagService:
     def __init__(self, embedding_service: FakeEmbeddingService) -> None:
         self.embedding_service = embedding_service
 
-    def answer(self, query: str, top_k: int, query_mode: str = "general", section_filter: str | None = None):
+    def answer(
+        self,
+        query: str,
+        top_k: int,
+        query_mode: str = "general",
+        section_filter: str | None = None,
+        use_flare: bool = False,
+    ):
         results = self.embedding_service.search(query, top_k, section_filter)
         if not results:
             return AnswerResponse(

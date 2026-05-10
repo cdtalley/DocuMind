@@ -36,6 +36,8 @@ Bundled text “papers” live under `data/sample_docs/`—60-plus summaries spa
 
 To grow the library for real: `scripts/bulk_ingest_arxiv.py` with `data/arxiv_seed_list.txt` (I throttle between requests so I’m not hammering arXiv).
 
+**FLARE-style active retrieval** (optional): [FLARE](https://arxiv.org/abs/2305.06983) (*Active Retrieval Augmented Generation*, Jiang et al., EMNLP 2023) improves long-form RAG by querying the corpus again when the model’s forward-looking continuation is uncertain. The reference implementation uses token logprobs; **Ollama’s chat API does not expose per-token probabilities here**, so DocuMind uses a **short draft** that must mark unsupported facts with `???` or explicit “not stated in excerpt”-style hedges; when those appear, the service runs a **second embedding search** with the user question plus that draft, **merges** unique chunks (best distance wins), then runs the usual synthesis. That is **retrieval-time** optimization and complements fixed **ingest-time chunking** (`CHUNK_SIZE` / `CHUNK_OVERLAP` in settings): chunks define evidence windows; FLARE improves *when* and *with what text* the index is queried again. Enable with `use_flare: true` on `POST /api/v1/query`, the dashboard checkbox, or `FLARE_ACTIVE_RETRIEVAL=true` in `.env`. Responses include `flare_enabled` and `flare_followup_retrieval`.
+
 ---
 
 ## Ops and “production-shaped” bits

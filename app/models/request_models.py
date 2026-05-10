@@ -20,6 +20,14 @@ class QueryRequest(BaseModel):
         default=None,
         description="Restrict retrieval to chunks whose detected section matches (see chunker metadata).",
     )
+    use_flare: bool = Field(
+        default=False,
+        description=(
+            "If true (or FLARE_ACTIVE_RETRIEVAL in settings), run FLARE-inspired active retrieval: "
+            "a short forward-looking draft may trigger a second embedding search, then merge chunks before generation. "
+            "Ignored for datasets mode."
+        ),
+    )
 
 
 class ArxivFetchRequest(BaseModel):

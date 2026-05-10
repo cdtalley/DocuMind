@@ -49,6 +49,12 @@ with tabs[0]:
         ["All Sections", "abstract", "introduction", "methodology", "experiments", "results", "conclusion"],
     )
     top_k = st.slider("Top K", 3, 24, 6)
+    use_flare = st.checkbox(
+        "FLARE-style active retrieval (draft + possible 2nd search)",
+        value=False,
+        disabled=(mode_label == "Dataset Finder"),
+        help="Ignored for Dataset Finder. Adds one short LLM draft before optionally merging a second retrieval pass.",
+    )
     query = st.text_area(
         "Question", placeholder="e.g. What datasets were used for tabular fraud detection?"
     )
@@ -58,6 +64,7 @@ with tabs[0]:
             "top_k": top_k,
             "query_mode": mode_mapping[mode_label],
             "section_filter": None if section == "All Sections" else section,
+            "use_flare": bool(use_flare),
         }
         with st.spinner("Reasoning over your paper library..."):
             resp = api_post("/api/v1/query", payload)
@@ -68,6 +75,8 @@ with tabs[0]:
                 unsafe_allow_html=True,
             )
             st.progress(float(data.get("confidence", 0.0)))
+            if data.get("flare_followup_retrieval"):
+                st.caption("Retrieval: FLARE follow-up pass merged into context.")
             if not data.get("has_answer"):
                 st.warning("No strong answer found in current library.")
             for i, src in enumerate(data.get("sources", []), start=1):

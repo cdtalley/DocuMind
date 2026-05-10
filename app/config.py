@@ -40,6 +40,12 @@ class Settings(BaseSettings):
     LOG_JSON: bool = False
     # Send gzip-compressed responses when client accepts encoding (reduces bandwidth for large JSON).
     ENABLE_RESPONSE_GZIP: bool = True
+    # FLARE-inspired active retrieval (Jiang et al., EMNLP 2023 / arXiv:2305.06983): optional second vector search
+    # driven by a short forward-looking draft. Ollama does not expose per-token logprobs here; we trigger follow-up
+    # retrieval on ??? markers and explicit hedges in the draft (see rag_service).
+    FLARE_ACTIVE_RETRIEVAL: bool = False
+    # Cap total characters from first-pass chunks fed into the draft prompt (keeps latency predictable).
+    FLARE_DRAFT_MAX_CONTEXT_CHARS: int = 3200
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
 

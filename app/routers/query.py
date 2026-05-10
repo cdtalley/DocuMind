@@ -30,6 +30,7 @@ async def query_papers(
             top_k=request.top_k,
             query_mode=request.query_mode,
             section_filter=request.section_filter,
+            use_flare=request.use_flare,
         )
     except OllamaConnectionError as exc:
         raise HTTPException(
