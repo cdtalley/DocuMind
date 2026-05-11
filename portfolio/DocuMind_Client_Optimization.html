@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="color-scheme" content="light" />
+  <title>DocuMind — Client engagement: optimizing your RAG &amp; retrieval stack</title>
+  <meta name="description" content="How we assess and improve document RAG systems: retrieval, evaluation, operations, and handoff. Customer-facing engagement outline." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;0,8..60,700;1,8..60,400&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --text: #111827;
+      --muted: #4b5563;
+      --head: #0f172a;
+      --border: #9ca3af;
+      --table-head: #e5e7eb;
+    }
+    * { box-sizing: border-box; }
+    html { font-size: 16px; }
+    body {
+      margin: 0;
+      padding: 0;
+      font-family: "Source Serif 4", Georgia, "Times New Roman", serif;
+      color: var(--text);
+      background: #f3f4f6;
+      line-height: 1.65;
+    }
+    main {
+      max-width: 42rem;
+      margin: 0 auto;
+      padding: 2rem 1.5rem 3rem;
+      background: #fff;
+      min-height: 100vh;
+    }
+    h1 {
+      font-size: 1.85rem;
+      font-weight: 700;
+      margin: 0 0 0.35rem;
+      color: var(--head);
+      line-height: 1.2;
+    }
+    .subtitle {
+      font-size: 1rem;
+      color: var(--muted);
+      margin: 0 0 1.5rem;
+      font-style: italic;
+    }
+    .lede {
+      font-size: 1.08rem;
+      color: var(--text);
+      margin: 0 0 1.5rem;
+      line-height: 1.55;
+    }
+    h2 {
+      font-size: 1.15rem;
+      font-weight: 600;
+      margin: 2rem 0 0.65rem;
+      padding-bottom: 0.25rem;
+      border-bottom: 2px solid var(--border);
+      color: #111827;
+      break-after: avoid;
+    }
+    h3 {
+      font-size: 1.02rem;
+      font-weight: 600;
+      margin: 1.25rem 0 0.4rem;
+      color: #1e293b;
+    }
+    p, li { font-size: 1.02rem; margin: 0.6rem 0; }
+    ul, ol { padding-left: 1.35rem; }
+    li { margin: 0.4rem 0; }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 1rem 0;
+      font-size: 0.95rem;
+      border: 1px solid var(--border);
+    }
+    th, td {
+      border: 1px solid var(--border);
+      padding: 9px 11px;
+      text-align: left;
+      vertical-align: top;
+    }
+    th { background: var(--table-head); font-weight: 600; }
+    .callout {
+      border: 1px solid var(--border);
+      background: #f8fafc;
+      padding: 14px 16px;
+      margin: 1.25rem 0;
+      font-size: 0.98rem;
+      line-height: 1.55;
+    }
+    code, kbd {
+      font-family: ui-monospace, Consolas, monospace;
+      font-size: 0.88em;
+      background: #e5e7eb;
+      padding: 0.1em 0.35em;
+      border-radius: 3px;
+    }
+    .muted { color: var(--muted); font-size: 0.95rem; }
+    @page { size: letter; margin: 0.75in; }
+    @media print {
+      html { font-size: 12pt; }
+      body { background: #fff !important; color: #000 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+      main { max-width: none; margin: 0; padding: 0; min-height: 0; }
+      h1, h2, h3, p, li { color: #000 !important; }
+      th { background: #eee !important; }
+      .callout { border-color: #999 !important; page-break-inside: avoid; }
+      a { color: #000; text-decoration: underline; }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Optimizing your retrieval-augmented system</h1>
+    <p class="subtitle">Engagement outline for teams with an existing RAG, search, or document-Q&amp;A pipeline</p>
+    <p class="lede">
+      This document describes how we work with your current stack—not a generic &ldquo;AI transformation&rdquo; narrative.
+      Scope is bounded: ingestion quality, chunking and metadata, vector retrieval, reranking, prompt and mode contracts,
+      evaluation harnesses, latency and cost, and production operations (health, auth, logging). Deliverables map to
+      evidence you can accept in writing.
+    </p>
+
+    <div class="callout">
+      <strong>Prerequisite.</strong> You designate a technical owner, grant read access to code and infrastructure (or a
+      sanitized replica), and provide a representative document set plus 10–30 example questions your operators actually ask.
+      Without those, we can only deliver generic guidance—not an optimization plan you can defend internally.
+    </div>
+
+    <h2>1. What &ldquo;optimize&rdquo; means here</h2>
+    <p>We improve measurable outcomes on your corpus and traffic profile:</p>
+    <ul>
+      <li><strong>Retrieval precision and recall</strong> — fewer irrelevant chunks in context; fewer missed passages when the answer exists in the library.</li>
+      <li><strong>Grounding and citation discipline</strong> — answers trace to chunk-level provenance; hallucination risk is reduced by construction, not by disclaimer text.</li>
+      <li><strong>Latency and cost</strong> — fewer redundant embed calls, tighter context budgets, predictable timeouts, optional second-pass retrieval only when justified.</li>
+      <li><strong>Operability</strong> — liveness vs readiness semantics, structured logs, failure modes that are diagnosable without reading model weights.</li>
+    </ul>
+    <p class="muted">We do not promise &ldquo;better prose&rdquo; without retrieval metrics. Prose follows evidence.</p>
+
+    <h2>2. Discovery and baseline (week 1)</h2>
+    <h3>2.1 Architecture map</h3>
+    <p>We document your actual data path: formats, parsers, chunk boundaries, embedding model and dimension, vector store and distance metric, rerankers (if any), orchestration layer, LLM host, and client contract (REST, gRPC, or embedded).</p>
+    <h3>2.2 Baseline metrics</h3>
+    <p>We establish a baseline on your questions and corpus slice:</p>
+    <ul>
+      <li>End-to-end latency (p50 / p95) per query class.</li>
+      <li>Retrieval diagnostics: top-k distribution, distance or score histograms, duplicate-document concentration in context.</li>
+      <li>Answer quality against a small labeled set or rubric-scored set (your team signs off on rubric).</li>
+    </ul>
+    <p>Reference pattern: a parameterized query suite with per-case expectations (HTTP contract, source counts, optional substring checks) and a live harness for integration runs—so regressions are caught before release.</p>
+
+    <h2>3. Technical levers we apply to your system</h2>
+    <table>
+      <thead>
+        <tr><th>Layer</th><th>Typical issues</th><th>What we change</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Ingestion &amp; chunking</td>
+          <td>Broken tables, header loss, oversized chunks, missing section metadata.</td>
+          <td>Parser upgrades, chunk size/overlap tuned to your doc types, section or page metadata for filters and citations.</td>
+        </tr>
+        <tr>
+          <td>Embeddings &amp; index</td>
+          <td>Wrong metric vs model training, stale index, single embedding field for heterogeneous docs.</td>
+          <td>Align distance metric with model, re-embed policy, optional hybrid lexical channel where vector alone underperforms.</td>
+        </tr>
+        <tr>
+          <td>Retrieval &amp; fusion</td>
+          <td>Top-k too low for multi-doc questions; strict threshold drops all chunks; one document dominates context.</td>
+          <td>Mode-aware retrieve budgets, keyword-assisted rerank on top of vector distance, diversity rules for multi-source answers, mode-specific relevance slack where cross-document synthesis is required.</td>
+        </tr>
+        <tr>
+          <td>Generation contract</td>
+          <td>One generic prompt; compare questions get single-paper answers.</td>
+          <td>Separate system prompts per task shape (Q&amp;A, compare, methodology extract, dataset inventory, reproducibility checklist), explicit grounding rules, optional second retrieval when a short draft flags missing evidence.</td>
+        </tr>
+        <tr>
+          <td>API &amp; operations</td>
+          <td>Single health endpoint; 500s on dependency failure; no request correlation.</td>
+          <td>Liveness vs readiness split, timeouts and backoff on model hosts, request IDs, optional API key or JWT on write paths.</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h2>4. Phased delivery</h2>
+    <table>
+      <thead>
+        <tr><th>Phase</th><th>Output</th><th>Acceptance signal</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Assessment</td>
+          <td>Written architecture note, risk register, prioritized backlog.</td>
+          <td>Your technical owner signs or returns one consolidated change round.</td>
+        </tr>
+        <tr>
+          <td>Retrieval hardening</td>
+          <td>Chunk/metadata changes, retrieve/rerank/diversity parameters, section filters validated.</td>
+          <td>Golden-set or query-suite pass rate meets agreed threshold on staging data.</td>
+        </tr>
+        <tr>
+          <td>Generation &amp; UX contract</td>
+          <td>Prompt/mode changes, citation payload shape, empty-index behavior.</td>
+          <td>Sample queries return non-empty sources when ground truth exists; no-answer path when it does not.</td>
+        </tr>
+        <tr>
+          <td>Production handoff</td>
+          <td>Runbook, <code>.env.example</code>, dashboard or log queries for SLO checks.</td>
+          <td>Readiness check passes on agreed deployment; documented rollback.</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h2>5. Success criteria (examples)</h2>
+    <p>We negotiate numeric or binary targets per engagement. Examples:</p>
+    <ul>
+      <li>Retrieval: at least <em>X</em>% of held-out questions retrieve a chunk containing the labeled answer span in top-<em>k</em>.</li>
+      <li>Latency: p95 under <em>T</em> ms for standard queries on agreed hardware (or cost cap per 1k queries in cloud).</li>
+      <li>Stability: zero unhandled 5xx on dependency timeout during soak test; readiness endpoint returns 503 when embed or LLM host is down.</li>
+      <li>Regression: query suite stays green in CI on every merge to main.</li>
+    </ul>
+
+    <h2>6. Explicit boundaries</h2>
+    <ul>
+      <li>We do not fine-tune proprietary LLMs on your data unless that is a separate, scoped workstream with evaluation budget.</li>
+      <li>We do not sign legal attestation for SOC2 or HIPAA on your behalf; we can align implementation to controls your counsel defines.</li>
+      <li>OCR quality and scanned-PDF recovery are separate line items when source PDFs are image-only.</li>
+    </ul>
+
+    <h2>7. How to use this document</h2>
+    <p>Attach it to procurement or vendor intake as the <strong>statement of approach</strong>. Pair it with a milestone table (fixed price or time-and-materials cap) and a short golden-question list from your domain. Export PDF: Chrome or Edge, <kbd>Ctrl</kbd>+<kbd>P</kbd>, Save as PDF, margins default, background graphics off.</p>
+    <p class="muted">Reference implementation: <a href="https://github.com/cdtalley/DocuMind">DocuMind</a> (open repository). Engagement terms, pricing, and SLAs are agreed per client in the contract—not on this page.</p>
+  </main>
+</body>
+</html>

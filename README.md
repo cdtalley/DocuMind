@@ -289,6 +289,8 @@ pytest -q
 
 **Query regression suite:** `tests/test_rag_query_suite.py` runs **20** parameterized cases (`tests/query_eval_cases.py`) against **real `RAGService`** with a **ranking fake vector layer** (`tests/ranking_fake_embedding.py`) and a deterministic Ollama stub — metrics cover status, `has_answer`, source counts, answer substrings, and wall time. **Live library smoke:** `python scripts/run_query_eval.py --base-url http://127.0.0.1:8001` (optional `--csv report.csv`; skips empty-corpus cases with `--skip-empty-corpus-cases`).
 
+**CI:** On push and pull request to `main` or `master`, GitHub Actions (`.github/workflows/ci.yml`) runs on **Python 3.11 and 3.12**: `ruff check` (syntax / undefined-name rules), then **`pytest`**. No Ollama or Chroma in CI. Pytest and Ruff defaults: **`pyproject.toml`**. Dependabot for Actions: **`.github/dependabot.yml`**.
+
 ---
 
 ## 16. Known limitations and extension points
