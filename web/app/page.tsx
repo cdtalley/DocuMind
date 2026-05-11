@@ -407,7 +407,7 @@ export default function HomePage() {
           <div>
             <div className="enterprise-topbar__title">DocuMind</div>
             <div className="enterprise-topbar__subtitle">
-              Multi-document RAG · local Chroma + Ollama · FastAPI / OpenAPI
+              Multi-document RAG · Chroma · Ollama · FastAPI · OpenAPI v1
             </div>
           </div>
         </div>
@@ -482,9 +482,9 @@ export default function HomePage() {
               <div>
                 <h2 className="card-hero-title">Cross-document retrieval</h2>
                 <p className="card-hero-lead">
-                  Query modes change prompts and filters. Each run returns Markdown, a confidence value, and optional
-                  FLARE-style second retrieval. Pick a showcase card, run query, then open Sources to inspect chunk
-                  text and distances.
+                  Modes alter retrieval budget, section scope, and prompt shape. Response: Markdown synthesis,
+                  confidence score, source cards (chunk text, cosine distance). Optional second retrieval pass (FLARE-style).
+                  Load a scenario, run query, expand Sources.
                 </p>
               </div>
               <span className="kbd-hint" title="Submit from the question field">

@@ -116,29 +116,29 @@ def render_documind_sentinel_tile(out_png: Path) -> None:
 
     margin_l = 40
     y = 28
-    draw.text((margin_l, y), "REFERENCE STACK", fill=ACCENT, font=fonts["kicker"])
+    draw.text((margin_l, y), "SYSTEM STACK", fill=ACCENT, font=fonts["kicker"])
     y += 26
 
     t1 = "DocuMind — "
-    t2 = "Vector research console"
+    t2 = "Grounded corpus RAG"
     draw.text((margin_l, y), t1, fill=WHITE, font=fonts["title"])
     b1 = draw.textbbox((margin_l, y), t1, font=fonts["title"])
     draw.text((b1[2], y), t2, fill=ACCENT, font=fonts["title"])
 
-    stack = "FastAPI · Chroma · hybrid retrieval · Markdown synthesis · Next.js console · Docker"
+    stack = "FastAPI · Chroma cosine · Ollama · mode-aware K · keyword rerank · Next.js · Docker"
     y += 52
     draw.text((margin_l, y), stack, fill=LABEL_GRAY, font=fonts["stack_line"])
 
-    # 2×2 cards (left block)
+    # 2×2 cards — production signals (match README / config story)
     y_cards = 198
     cw, ch = 228, 118
     gap = 14
-    _draw_metric_card(draw, margin_l, y_cards, cw, ch, "400+", "indexed docs", fonts)
-    _draw_metric_card(draw, margin_l + cw + gap, y_cards, cw, ch, "Hybrid", "dense + sparse", fonts)
-    _draw_metric_card(draw, margin_l, y_cards + ch + gap, cw, ch, "MD", "synthesis output", fonts)
-    _draw_metric_card(draw, margin_l + cw + gap, y_cards + ch + gap, cw, ch, "REST", "/rag · /health", fonts)
+    _draw_metric_card(draw, margin_l, y_cards, cw, ch, "Chroma", "cosine · persist", fonts)
+    _draw_metric_card(draw, margin_l + cw + gap, y_cards, cw, ch, "Rerank", "dense + keyword", fonts)
+    _draw_metric_card(draw, margin_l, y_cards + ch + gap, cw, ch, "Health", "live · ready", fonts)
+    _draw_metric_card(draw, margin_l + cw + gap, y_cards + ch + gap, cw, ch, "FastAPI", "openapi · v1", fonts)
 
-    pills = ["FastAPI", "Chroma", "Ollama", "Next.js", "Docker", "Playwright"]
+    pills = ["FastAPI", "Chroma", "Ollama", "Next.js", "Docker", "LangChain"]
     _draw_pill_row(draw, pills, fonts["pill"], margin_l, H - 56, gap=10)
 
     draw.rectangle((0, H - 3, W, H), fill=ACCENT)

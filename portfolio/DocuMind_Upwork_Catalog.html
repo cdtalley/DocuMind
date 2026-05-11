@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta name="color-scheme" content="light" />
   <title>DocuMind — Upwork portfolio &amp; project catalog brief</title>
-  <meta name="description" content="DocuMind: local-first research RAG (FastAPI, ChromaDB, Ollama, Next.js). Portfolio brief for Upwork attachments and proposals." />
+  <meta name="description" content="DocuMind: FastAPI RAG with Chroma cosine index, Ollama inference, mode-specific retrieval, OpenAPI v1, live/ready probes. Next.js UI. Reference implementation for technical hiring and fixed-scope contracts." />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;0,8..60,700;1,8..60,400&display=swap" rel="stylesheet" />
@@ -165,7 +165,7 @@
 <body>
   <main>
     <h1>DocuMind</h1>
-    <p class="lede">Local-first RAG over a research library. Use this page as an <strong>Upwork attachment</strong> (save as PDF from Chrome/Edge) or paste sections into your <strong>Project Catalog</strong> and proposals. Replace only the bracketed profile link below.</p>
+    <p class="lede">Single-page brief for recruiters and marketplace attachments. Export <strong>PDF</strong> from Chrome or Edge (<kbd>Ctrl</kbd>+<kbd>P</kbd> &rarr; Save as PDF). Paste sections into proposals as needed. Fill bracketed placeholders before sending.</p>
 
     <div class="callout">
       <strong>Before you publish:</strong> (1) Re-run the screenshot pipeline if the UI changed, (2) paste your Upwork profile URL below, (3) replace the pricing placeholders with your numbers, (4) add a staging URL or say you demo over screen share.
@@ -181,11 +181,11 @@
       <a href="screenshots/documind-dashboard.png" title="Open full dashboard capture (Playwright; default 1680×3200)">
         <img src="screenshots/documind-upwork-catalog-1000x750.png" width="1000" height="750" alt="DocuMind — portfolio tile: poster left, live dashboard right (1000×750)" loading="lazy" decoding="async" />
       </a>
-      <figcaption><strong>Figure 1.</strong> <strong>1000×750</strong> — narrow left spine (stack) + ~82% width <strong>zoomed</strong> UI band (short vertical crop from the capture so body text stays readable). Re-upload after regenerating. Full: <code>screenshots/documind-dashboard.png</code> (prefer 1680px-wide capture).</figcaption>
+      <figcaption><strong>Figure 1.</strong> Project catalog tile <strong>1000×750</strong> (vector layout: stack line, four capability cards, runtime pills). Regenerate: <code>python scripts/catalog_thumb_art.py --out portfolio/screenshots/documind-upwork-catalog-1000x750.png</code>. Full dashboard capture for interviews: <code>screenshots/documind-dashboard.png</code> (Playwright; default 1680×3200 viewport).</figcaption>
     </figure>
 
     <h2>One-line pitch</h2>
-    <p>Ingest PDFs, Word, and text; optional arXiv fetch; section-style chunk metadata; ChromaDB vectors; retrieval with rerank and cross-paper diversity; Ollama-backed answers with mode-specific prompts and citations; optional FLARE-style second retrieval. FastAPI service and Next.js UI; bundled sample corpus (~460 UTF-8 briefs) indexes when Ollama is available.</p>
+    <p>FastAPI service: ingest PDF/DOCX/TXT (optional arXiv pull), LangChain-style chunking into Chroma with cosine distance, query modes that change retrieval budget and prompts, keyword-weighted rerank, optional FLARE-inspired follow-up retrieval, citations with chunk metadata. Ollama for embed + chat; Next.js dashboard; pytest on routers; <code>/health/live</code> vs <code>/health/ready</code>.</p>
 
     <h2>What you ship in this shape</h2>
     <ul>

@@ -317,7 +317,7 @@ Under **`portfolio/`**: client project catalog HTML, portfolio brief HTML, optio
 # Custom API / wait cap:                .\scripts\capture_dashboard.ps1 -ApiBase "http://127.0.0.1:8001" -MaxLivenessWaitMinutes 240
 ```
 
-Or directly: `.\.venv\Scripts\python scripts\capture_dashboard_playwright.py --help` — waits for **≥120 chars** in `.prose-answer`, scrolls synthesis into view, writes **1680×3200** `portfolio/screenshots/documind-dashboard.png` (default `--viewport-width 1680`; use `--viewport-width 1440` if needed), then **1000×750** `portfolio/screenshots/documind-upwork-catalog-1000x750.png` (default Sentinel-style typography tile; `--plain-catalog-thumb` top-crops the dashboard). Thumb only: `.\.venv\Scripts\python scripts\capture_dashboard_playwright.py --thumb-only`. Standalone tile: `python scripts/catalog_thumb_art.py --out portfolio/screenshots/documind-upwork-catalog-1000x750.png`. Avoid `--full-page` for portfolio assets.
+Or directly: `.\.venv\Scripts\python scripts\capture_dashboard_playwright.py --help` — waits for **≥120 chars** in `.prose-answer`, scrolls synthesis into view, writes **1680×3200** `portfolio/screenshots/documind-dashboard.png` (default `--viewport-width 1680`; use `--viewport-width 1440` if needed), then **1000×750** `portfolio/screenshots/documind-upwork-catalog-1000x750.png` (default stack infographic tile; `--plain-catalog-thumb` top-crops the dashboard). Thumb only: `.\.venv\Scripts\python scripts\capture_dashboard_playwright.py --thumb-only`. Standalone tile: `python scripts/catalog_thumb_art.py --out portfolio/screenshots/documind-upwork-catalog-1000x750.png`. Avoid `--full-page` for portfolio assets.
 
 ---
 

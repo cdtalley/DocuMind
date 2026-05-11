@@ -37,7 +37,7 @@
 </head>
 <body>
   <main>
-    <div class="banner">Upwork Project Catalog &mdash; Fixed-price offer (adapt from DocuMind-class reference implementation)</div>
+    <div class="banner">Fixed-price offer &mdash; document RAG MVP (scope aligned with production-style reference builds)</div>
 
     <h1>Document RAG MVP: ingest, index, grounded Q&amp;A, deploy</h1>
     <p class="meta">Single-tenant MVP suitable for internal research, policy, or technical libraries. You get a working API, operator UI, handoff docs, and two weeks of post-launch defect support.</p>
@@ -46,7 +46,7 @@
     <p class="meta" style="margin-top:0">Structured as three Upwork milestones (below). Alternative: <strong>USD 135/hr</strong> with a <strong>25-hour minimum</strong> if you prefer hourly with a capped discovery phase first.</p>
 
     <div class="callout">
-      <strong>Why this number:</strong> It reflects a bounded MVP (not open-ended consulting), includes integration and one deployment target, and leaves room for you to discount slightly for your first few contracts without working below market. If the client needs SSO, multi-tenant ACLs on chunks, or formal model risk documentation, treat those as Phase 2 (see add-ons).
+      <strong>Pricing note:</strong> Scoped MVP: one deployment surface, written milestones, bounded defect window. Discounts are your call; scope creep (SSO, multi-tenant ACLs on chunks, formal model governance packs) belongs in Phase 2 or add-ons.
     </div>
 
     <h2>Market context: what &ldquo;RAG MVP&rdquo; usually means on talent marketplaces</h2>
@@ -83,15 +83,15 @@
         </tr>
       </tbody>
     </table>
-    <p class="meta">Public repos in the &ldquo;ChatPDF + LangChain + vector DB&rdquo; shape (for example <em>ChatPDF-RAG</em>, <em>AskMyPDF-GPT4</em>, <em>RAG-PDF</em> on GitHub) illustrate how common the pattern is: easy to clone, hard to defend in procurement without the rows above addressed.</p>
+    <p class="meta">Many public &ldquo;ChatPDF&rdquo; repos share the same shallow shape: single chain, hosted keys assumed, weak acceptance criteria. Procurement and internal platform teams ask for health semantics, API contracts, and repeatable ingest — the gap this catalog closes.</p>
 
     <h2>What makes <em>this</em> catalog stand out for buyers</h2>
     <ul>
-      <li><strong>Written acceptance criteria per milestone</strong> (ingest success, non-empty citations, readiness check) so escrow maps to evidence, not vibes.</li>
+      <li><strong>Written acceptance criteria per milestone</strong> (ingest success, non-empty citations, readiness check) so escrow maps to verifiable deliverables.</li>
       <li><strong>Dual health model</strong> (liveness vs readiness) aligned with how platform teams deploy behind proxies.</li>
       <li><strong>Retrieval behavior spelled in</strong> (top-k, optional section filter, rerank / diversity) so one paper cannot dominate context&mdash;a frequent failure in generic RAG demos.</li>
       <li><strong>Multiple grounded query modes</strong> (not only Q&amp;A): comparison, methodology, structured dataset hints, reproducibility-style checklist&mdash;signals research-adjacent use, not a single chat box.</li>
-      <li><strong>Deployment + runbook + bounded support</strong> treats the handoff as part of the product, which differentiates from &ldquo;here is my Colab link.&rdquo;</li>
+      <li><strong>Deployment + runbook + bounded support</strong> so handoff is contractual, not an ad-hoc repo drop.</li>
     </ul>
 
     <h2>What the client receives</h2>
@@ -175,7 +175,7 @@
     <h2>Print to PDF</h2>
     <p>Open this file in Chrome or Edge, Ctrl+P, Save as PDF, margins Default, background graphics Off.</p>
 
-    <p class="meta" style="margin-top:2rem;"><em>Reference codebase: DocuMind (local RAG demo). Replace this footer with your public repo or private demo link when posting.</em></p>
+    <p class="meta" style="margin-top:2rem;"><em>Reference: DocuMind (FastAPI + Chroma + Ollama + Next.js). Replace with your repo or demo link before posting.</em></p>
   </main>
 </body>
 </html>
