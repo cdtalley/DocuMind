@@ -49,9 +49,9 @@ def main() -> int:
     parser.add_argument("--out", type=Path, default=DEFAULT_OUT, help="Output PNG path")
     parser.add_argument(
         "--scenario",
-        choices=("flagship", "datasets", "reproduce", "methodology"),
-        default="flagship",
-        help="Showcase card before Run query (default: flagship — richer cross-paper answer for portfolio shots).",
+        choices=("gold", "flagship", "datasets", "reproduce", "methodology"),
+        default="gold",
+        help="Showcase card before Run query (default: gold — demo-tuned compare query, Top K 24, FLARE on).",
     )
     parser.add_argument(
         "--min-docs",
@@ -125,6 +125,7 @@ def main() -> int:
         return 1
 
     label_map = {
+        "gold": "Gold: demo & QA",
         "flagship": "Flagship: research landscape",
         "datasets": "Dataset map",
         "reproduce": "Repro blueprint",
@@ -178,6 +179,8 @@ def main() -> int:
         page.get_by_role("heading", name="Synthesis").wait_for(state="visible", timeout=args.timeout_ms)
 
         min_chars = max(20, args.min_answer_chars)
+        if args.scenario == "gold":
+            min_chars = max(min_chars, 900)
         page.wait_for_function(
             f"""() => {{
               const el = document.querySelector(".prose-answer");

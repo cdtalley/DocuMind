@@ -225,7 +225,12 @@ class RAGService:
     def _pick_context_from_reranked(
         self, reranked: list[dict], overlap_query: str, query_mode: str, top_k: int
     ) -> tuple[list[dict], bool]:
-        filtered = [item for item in reranked if item["distance"] < self.settings.RELEVANCE_THRESHOLD]
+        # Compare synthesis needs multiple papers; a single chunk can pass the strict cosine
+        # gate while other relevant near-misses sit just above it — then context collapses to one doc.
+        thr = float(self.settings.RELEVANCE_THRESHOLD)
+        if query_mode == "compare":
+            thr = min(0.62, thr + 0.12)
+        filtered = [item for item in reranked if item["distance"] < thr]
         used_fallback = False
         if not filtered and reranked and self.settings.ENABLE_FALLBACK_RETRIEVAL:
             filtered = reranked[: min(self.settings.FALLBACK_TOP_N, len(reranked))]

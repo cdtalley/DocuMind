@@ -55,7 +55,14 @@ def main() -> int:
     ap = argparse.ArgumentParser(description="HTTP latency benchmark for DocuMind API")
     ap.add_argument("--base-url", default="http://127.0.0.1:8001", help="API root (no trailing slash)")
     ap.add_argument("-n", "--iterations", type=int, default=30, help="Requests per endpoint")
-    ap.add_argument("--query", default="What datasets are mentioned?", help="Body for POST /api/v1/query")
+    ap.add_argument(
+        "--query",
+        default=(
+            "DEMO — Cross-paper benchmark audit. Retrieval: GLUE ImageNet Cora C4 transformers tabular graph. "
+            "Compare papers in context with a markdown table: method, exact title, datasets named, claim, limitation."
+        ),
+        help="Body for POST /api/v1/query",
+    )
     ns = ap.parse_args()
     base = ns.base_url.rstrip("/")
 

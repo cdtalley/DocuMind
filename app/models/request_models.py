@@ -1,6 +1,6 @@
 from typing import Literal, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 SectionFilter = Literal[
     "abstract",
@@ -28,6 +28,13 @@ class QueryRequest(BaseModel):
             "Ignored for datasets mode."
         ),
     )
+
+    @field_validator("query", mode="before")
+    @classmethod
+    def strip_query(cls, v: object) -> object:
+        if isinstance(v, str):
+            return v.strip()
+        return v
 
 
 class ArxivFetchRequest(BaseModel):

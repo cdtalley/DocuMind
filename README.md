@@ -285,7 +285,9 @@ Applied in `app/main.py` (order matters for FastAPI / Starlette):
 pytest -q
 ```
 
-`tests/conftest.py` overrides FastAPI dependencies with fake embedding/RAG services so unit tests do not require Ollama or Chroma. Integration-style tests that hit real routes still use those fakes unless extended.
+`tests/conftest.py` overrides FastAPI dependencies with fake embedding/RAG services so unit tests do not require Ollama or Chroma.
+
+**Query regression suite:** `tests/test_rag_query_suite.py` runs **20** parameterized cases (`tests/query_eval_cases.py`) against **real `RAGService`** with a **ranking fake vector layer** (`tests/ranking_fake_embedding.py`) and a deterministic Ollama stub — metrics cover status, `has_answer`, source counts, answer substrings, and wall time. **Live library smoke:** `python scripts/run_query_eval.py --base-url http://127.0.0.1:8001` (optional `--csv report.csv`; skips empty-corpus cases with `--skip-empty-corpus-cases`).
 
 ---
 
@@ -312,7 +314,7 @@ Under **`portfolio/`**: client project catalog HTML, portfolio brief HTML, optio
 ```powershell
 .\.venv\Scripts\pip install -r scripts\screenshot_requirements.txt
 .\.venv\Scripts\playwright install chromium
-.\scripts\capture_dashboard.ps1                    # waits for /health/live, Flagship query, waits for real synthesis text, tall-viewport PNG
+.\scripts\capture_dashboard.ps1                    # waits for /health/live, Gold demo scenario (compare, Top K 24, FLARE), synthesis text, tall-viewport PNG
 # Smaller corpus / faster index gate:  .\scripts\capture_dashboard.ps1 -MinDocs 40
 # Custom API / wait cap:                .\scripts\capture_dashboard.ps1 -ApiBase "http://127.0.0.1:8001" -MaxLivenessWaitMinutes 240
 ```
