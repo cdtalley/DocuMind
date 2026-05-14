@@ -303,7 +303,8 @@ Applied in `app/main.py` (order matters for FastAPI / Starlette):
    Use `--articles 50000` or higher for serious scale; `--articles 0 --allow-unbounded` streams the full dump (disk-hungry).  
 3. **Piecemeal:** `scripts/stream_wikipedia_to_txt.py` → `scripts/bulk_index_public.py` (`--dry-run` for chunk estimates, `--checkpoint` for resume, `--workers` for parallel Ollama embeds).  
 4. **Ops:** `GET /api/v1/libraries` for both collections’ chunk and document counts.  
-5. **Scale narrative + disk report:** [docs/SCALE_OPERATIONS_PLAYBOOK.md](docs/SCALE_OPERATIONS_PLAYBOOK.md); `python scripts/report_corpus_scale.py` (needs running API).
+5. **Scale narrative + disk report:** [docs/SCALE_OPERATIONS_PLAYBOOK.md](docs/SCALE_OPERATIONS_PLAYBOOK.md); `python scripts/report_corpus_scale.py` (needs running API).  
+6. **Public wiki RAG bench:** [evaluation/wiki_public_bench.json](evaluation/wiki_public_bench.json) — twenty grounded probes; run `python scripts/run_wiki_public_bench.py --base-url http://127.0.0.1:8001` (tune `PUBLIC_RELEVANCE_THRESHOLD` / `PUBLIC_KEYWORD_RERANK_WEIGHT` in `.env` if recall is thin on a small slice).
 
 ### Other scripts
 

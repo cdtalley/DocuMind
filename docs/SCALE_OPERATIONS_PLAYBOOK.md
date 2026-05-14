@@ -73,6 +73,7 @@ Use this doc when you need to **sound like you have run and maintained** large r
 pytest -q
 python scripts/report_corpus_scale.py --api-base http://127.0.0.1:8001
 python scripts/bulk_index_public.py --txt-dir data/wiki_txt_build --dry-run
+python scripts/run_wiki_public_bench.py --base-url http://127.0.0.1:8001 --snapshot-only
 ```
 
 ## 8. “What we’d do next” at real enterprise scale

@@ -1,0 +1,167 @@
+{
+  "version": "1",
+  "description": "Twenty grounded-RAG probes for the public (Wikipedia-scale) library. Use with library=public. Coverage depends on indexed shards — empty answers are valid signals to widen Top K or grow the corpus.",
+  "library": "public",
+  "cases": [
+    {
+      "id": "W01",
+      "query": "Summarize what the indexed articles say about any historical event, person, or place they mention. Cite **Article title** for each claim.",
+      "query_mode": "general",
+      "top_k": 10,
+      "use_flare": false,
+      "note": "Corpus-agnostic sanity: forces citation discipline on whatever is in the index."
+    },
+    {
+      "id": "W02",
+      "query": "What scientific or technical concepts appear in the retrieved passages? List each with one sentence of support and **Article title**.",
+      "query_mode": "general",
+      "top_k": 12,
+      "use_flare": false,
+      "note": "Tests extraction without assuming a specific topic exists in your slice."
+    },
+    {
+      "id": "W03",
+      "query": "Compare how two or more indexed articles describe a shared theme (e.g. geography, biology, technology). Use a markdown table: Theme | **Article title** | Supported detail | Limitation.",
+      "query_mode": "compare",
+      "top_k": 14,
+      "use_flare": true,
+      "note": "Compare + optional FLARE stresses multi-doc recall."
+    },
+    {
+      "id": "W04",
+      "query": "List any dates, years, or time periods stated in the excerpts and what they refer to. Each bullet must include **Article title**.",
+      "query_mode": "methodology",
+      "top_k": 10,
+      "use_flare": false,
+      "note": "Temporal grounding — catches hallucinated timelines if model drifts."
+    },
+    {
+      "id": "W05",
+      "query": "What datasets, benchmarks, or corpora are named in the retrieved text? If none, say so explicitly.",
+      "query_mode": "datasets",
+      "top_k": 12,
+      "use_flare": false,
+      "note": "Deterministic datasets mode path."
+    },
+    {
+      "id": "W06",
+      "query": "If the passages describe a process, algorithm, or workflow, outline the steps as a checklist. Otherwise state that the excerpts do not describe a process. Cite **Article title**.",
+      "query_mode": "reproduce",
+      "top_k": 10,
+      "use_flare": false,
+      "note": "Reproduce mode on encyclopedia prose."
+    },
+    {
+      "id": "W07",
+      "query": "What geographical locations (cities, countries, regions, rivers) are mentioned in the context? Bullet list with **Article title** per location cluster.",
+      "query_mode": "general",
+      "top_k": 12,
+      "use_flare": false,
+      "note": "Common Wikipedia entity type."
+    },
+    {
+      "id": "W08",
+      "query": "What organizations, institutions, or companies appear in the excerpts? One line each with **Article title**.",
+      "query_mode": "general",
+      "top_k": 10,
+      "use_flare": false,
+      "note": "Entity extraction stress."
+    },
+    {
+      "id": "W09",
+      "query": "Do any passages disagree or present alternative viewpoints on the same topic? If so, summarize neutrally with **Article title**. If not, say the excerpts align or are unrelated.",
+      "query_mode": "compare",
+      "top_k": 14,
+      "use_flare": true,
+      "note": "Conflict / neutrality probe."
+    },
+    {
+      "id": "W10",
+      "query": "Extract any numerical facts (measurements, populations, years, distances) from the context only. Table: Value | What it refers to | **Article title**.",
+      "query_mode": "general",
+      "top_k": 12,
+      "use_flare": false,
+      "note": "Numeric grounding."
+    },
+    {
+      "id": "W11",
+      "query": "What biographical facts about any person named in the excerpts can you state? If no person appears, say so. Cite **Article title**.",
+      "query_mode": "general",
+      "top_k": 10,
+      "use_flare": false,
+      "note": "Biography-style without hard-coding a name."
+    },
+    {
+      "id": "W12",
+      "query": "What causes, effects, or mechanisms are described in the passages? Use ### Causes and ### Effects only if the text supports them; otherwise one short section on limits.",
+      "query_mode": "general",
+      "top_k": 12,
+      "use_flare": false,
+      "note": "Causal language guardrail."
+    },
+    {
+      "id": "W13",
+      "query": "What cultural, artistic, or literary topics appear? Summarize only from excerpts with **Article title**.",
+      "query_mode": "general",
+      "top_k": 10,
+      "use_flare": false,
+      "note": "Soft topic coverage."
+    },
+    {
+      "id": "W14",
+      "query": "What sports, games, or competitions are mentioned? If none, state that clearly.",
+      "query_mode": "general",
+      "top_k": 10,
+      "use_flare": false,
+      "note": "Domain-specific lexicon."
+    },
+    {
+      "id": "W15",
+      "query": "What medical, biological, or health-related terms appear? Define only using passage wording; cite **Article title**.",
+      "query_mode": "methodology",
+      "top_k": 12,
+      "use_flare": false,
+      "note": "Sensitive domain — grounding check."
+    },
+    {
+      "id": "W16",
+      "query": "What legal, political, or governmental concepts are discussed in the retrieved chunks? Bullet list with **Article title**.",
+      "query_mode": "general",
+      "top_k": 12,
+      "use_flare": false,
+      "note": "Another high-risk domain for hallucination."
+    },
+    {
+      "id": "W17",
+      "query": "What technologies (software, hardware, networks, energy) are referenced? Compare two if possible; else single-article depth.",
+      "query_mode": "compare",
+      "top_k": 14,
+      "use_flare": true,
+      "note": "Tech compare path."
+    },
+    {
+      "id": "W18",
+      "query": "In one paragraph, answer: What is the single most concrete fact the union of these excerpts best supports, and why is it well-supported? Name **Article title**.",
+      "query_mode": "general",
+      "top_k": 8,
+      "use_flare": false,
+      "note": "Calibration question for confidence vs evidence."
+    },
+    {
+      "id": "W19",
+      "query": "What questions CANNOT be answered from these excerpts alone? List 3–6 gaps as bullets.",
+      "query_mode": "general",
+      "top_k": 10,
+      "use_flare": false,
+      "note": "Meta — tests 'limits' section behavior."
+    },
+    {
+      "id": "W20",
+      "query": "Pretend you are briefing a VP in 120 words: what does this slice of the public index contain thematically, and what should they not conclude? Every sentence needs **Article title** anchor where factual.",
+      "query_mode": "general",
+      "top_k": 12,
+      "use_flare": true,
+      "note": "Executive summary + FLARE for possible follow-up retrieval."
+    }
+  ]
+}

@@ -23,6 +23,9 @@ class Settings(BaseSettings):
     CHUNK_OVERLAP: int = 100
     TOP_K_RESULTS: int = 6
     RELEVANCE_THRESHOLD: float = 0.45
+    # Public (encyclopedia) index: looser cosine gate + stronger lexical rerank for same embed model.
+    PUBLIC_RELEVANCE_THRESHOLD: float = 0.52
+    PUBLIC_KEYWORD_RERANK_WEIGHT: float = 0.22
     MAX_FILE_SIZE_MB: int = 50
     ARXIV_BASE_URL: str = "https://export.arxiv.org/pdf"
     ENABLE_FALLBACK_RETRIEVAL: bool = True

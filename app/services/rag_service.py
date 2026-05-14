@@ -251,12 +251,23 @@ class RAGService:
             return ("chunk", doc, ci)
         return ("hash", hash((item.get("content") or "")[:240]))
 
+    def _keyword_rerank_weight(self) -> float:
+        if self._content_library == "public":
+            return float(self.settings.PUBLIC_KEYWORD_RERANK_WEIGHT)
+        return float(self.settings.KEYWORD_RERANK_WEIGHT)
+
     def _retrieve_k_budget(self, top_k: int, query_mode: str) -> int:
+        if self._content_library == "public":
+            cap = 96
+            mult = 5
+        else:
+            cap = 64
+            mult = 4
         if query_mode in ("compare", "general"):
-            return min(64, max(top_k * 4, 20))
+            return min(cap, max(top_k * mult, 20))
         if query_mode in ("datasets", "reproduce", "methodology"):
-            return min(56, max(top_k * 3, 16))
-        return min(64, max(top_k * 4, 20))
+            return min(min(cap, 72), max(top_k * (mult - 1), 16))
+        return min(cap, max(top_k * mult, 20))
 
     def _context_slots_budget(self, top_k: int, query_mode: str) -> int:
         if query_mode in ("general", "compare"):
@@ -275,7 +286,7 @@ class RAGService:
     ) -> list[dict]:
         retrieve_k = self._retrieve_k_budget(top_k, query_mode)
         results = self.embedding_service.search(embed_query, retrieve_k, section_filter)
-        w = self.settings.KEYWORD_RERANK_WEIGHT
+        w = self._keyword_rerank_weight()
         return sorted(
             results,
             key=lambda item: item["distance"] - (w * self._keyword_overlap_score(overlap_query, item["content"])),
@@ -286,7 +297,11 @@ class RAGService:
     ) -> tuple[list[dict], bool]:
         # Compare synthesis needs multiple papers; a single chunk can pass the strict cosine
         # gate while other relevant near-misses sit just above it — then context collapses to one doc.
-        thr = float(self.settings.RELEVANCE_THRESHOLD)
+        thr = (
+            float(self.settings.PUBLIC_RELEVANCE_THRESHOLD)
+            if self._content_library == "public"
+            else float(self.settings.RELEVANCE_THRESHOLD)
+        )
         if query_mode == "compare":
             thr = min(0.62, thr + 0.12)
         filtered = [item for item in reranked if item["distance"] < thr]
@@ -306,7 +321,7 @@ class RAGService:
             if cur is None or float(item["distance"]) < float(cur["distance"]):
                 best[k] = item
         merged = list(best.values())
-        w = self.settings.KEYWORD_RERANK_WEIGHT
+        w = self._keyword_rerank_weight()
         return sorted(
             merged,
             key=lambda item: item["distance"] - (w * self._keyword_overlap_score(overlap_query, item["content"])),
