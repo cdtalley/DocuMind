@@ -9,14 +9,24 @@ from typing import Any
 os.environ.setdefault("ANONYMIZED_TELEMETRY", "False")
 
 import chromadb
+from chromadb.api.client import Client as ChromaClient
 from langchain_core.documents import Document
 
 from app.utils.ollama_client import OllamaClient
 
 
 class ChromaEmbeddingService:
-    def __init__(self, persist_dir: str, collection_name: str, ollama_client: OllamaClient) -> None:
-        self.client = chromadb.PersistentClient(path=persist_dir)
+    def __init__(
+        self,
+        collection_name: str,
+        ollama_client: OllamaClient,
+        *,
+        persist_dir: str | None = None,
+        chroma_client: ChromaClient | None = None,
+    ) -> None:
+        if (persist_dir is not None) == (chroma_client is not None):
+            raise ValueError("Exactly one of persist_dir or chroma_client is required")
+        self.client = chroma_client if chroma_client is not None else chromadb.PersistentClient(path=persist_dir)
         self.collection = self.client.get_or_create_collection(
             name=collection_name, metadata={"hnsw:space": "cosine"}
         )

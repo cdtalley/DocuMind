@@ -155,9 +155,9 @@ def main() -> int:
         return 1
 
     embedding = ChromaEmbeddingService(
+        settings.CHROMA_COLLECTION_PUBLIC,
+        client,
         persist_dir=settings.CHROMA_PERSIST_DIR,
-        collection_name=settings.CHROMA_COLLECTION_PUBLIC,
-        ollama_client=client,
     )
 
     workers = max(1, int(ns.workers))

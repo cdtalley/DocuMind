@@ -4,8 +4,10 @@ import logging
 import time
 import uuid
 from contextlib import asynccontextmanager
+from datetime import UTC, datetime
 from pathlib import Path
 
+import chromadb
 from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
@@ -29,6 +31,33 @@ logger = logging.getLogger("documind")
 ollama_client: OllamaClient | None = None
 embedding_registry: EmbeddingRegistry | None = None
 document_service: DocumentService | None = None
+
+
+def _chroma_load_is_recoverable(exc: BaseException) -> bool:
+    """Chroma 1.x can raise PyO3 PanicException when the SQLite store is corrupt or from an incompatible version."""
+    if isinstance(exc, (SystemExit, KeyboardInterrupt)):
+        return False
+    if exc.__class__.__name__ == "PanicException":
+        return True
+    msg = str(exc).lower()
+    if "out of range for slice" in msg:
+        return True
+    return False
+
+
+def _quarantine_chroma_persist_dir(persist: Path) -> None:
+    """Rename persist directory aside so a fresh empty store can be created (development recovery only)."""
+    if not persist.exists():
+        persist.mkdir(parents=True, exist_ok=True)
+        return
+    stamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
+    broken = persist.parent / f"{persist.name}.broken.{stamp}"
+    persist.rename(broken)
+    logger.warning(
+        "Renamed unreadable Chroma persist directory to %s — re-index papers/public corpora as needed.",
+        broken,
+    )
+    persist.mkdir(parents=True, exist_ok=True)
 
 
 def seed_sample_docs(registry: EmbeddingRegistry) -> None:
@@ -86,16 +115,37 @@ async def lifespan(_: FastAPI):
         llm_model=settings.LLM_MODEL,
         embedding_model=settings.EMBEDDING_MODEL,
     )
-    papers_svc = ChromaEmbeddingService(
-        persist_dir=settings.CHROMA_PERSIST_DIR,
-        collection_name=settings.CHROMA_COLLECTION_NAME,
-        ollama_client=ollama_client,
-    )
-    public_svc = ChromaEmbeddingService(
-        persist_dir=settings.CHROMA_PERSIST_DIR,
-        collection_name=settings.CHROMA_COLLECTION_PUBLIC,
-        ollama_client=ollama_client,
-    )
+
+    def _init_chroma_pair() -> tuple[ChromaEmbeddingService, ChromaEmbeddingService]:
+        persist_path = Path(settings.CHROMA_PERSIST_DIR)
+        persist_path.mkdir(parents=True, exist_ok=True)
+        shared = chromadb.PersistentClient(path=str(persist_path.resolve()))
+        papers = ChromaEmbeddingService(
+            settings.CHROMA_COLLECTION_NAME,
+            ollama_client,
+            chroma_client=shared,
+        )
+        public = ChromaEmbeddingService(
+            settings.CHROMA_COLLECTION_PUBLIC,
+            ollama_client,
+            chroma_client=shared,
+        )
+        return papers, public
+
+    try:
+        papers_svc, public_svc = _init_chroma_pair()
+    except BaseException as exc:
+        if isinstance(exc, (SystemExit, KeyboardInterrupt)):
+            raise
+        if settings.APP_ENV != "development" or not _chroma_load_is_recoverable(exc):
+            raise
+        logger.error(
+            "Chroma could not open %s (%s). Recovering once (APP_ENV=development): quarantining persist dir.",
+            settings.CHROMA_PERSIST_DIR,
+            exc,
+        )
+        _quarantine_chroma_persist_dir(Path(settings.CHROMA_PERSIST_DIR))
+        papers_svc, public_svc = _init_chroma_pair()
     rag_papers = RAGService(
         embedding_service=papers_svc,
         ollama_client=ollama_client,
