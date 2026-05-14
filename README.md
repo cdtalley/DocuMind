@@ -25,7 +25,8 @@ This document specifies **architecture**, **control flows**, **configuration**, 
 15. [Testing](#15-testing)  
 16. [Known limitations and extension points](#16-known-limitations-and-extension-points)  
 17. [Portfolio artifacts](#17-portfolio-artifacts)  
-18. [References](#18-references)
+18. [References](#18-references)  
+19. [Interview narrative: quality bar, challenges, and retrieval design](#19-interview-narrative-quality-bar-challenges-and-retrieval-design)
 
 ---
 
@@ -113,7 +114,7 @@ flowchart TB
   E --> C
 ```
 
-**Lifespan (`app/main.py`):** On startup, constructs `OllamaClient`, an **`EmbeddingRegistry`** with two `ChromaEmbeddingService` instances (public + papers) and two `RAGService` instances (`content_library` each). Optionally runs **`seed_sample_docs`** into the **papers** collection only when **`SEED_SAMPLE_DOCS=true`**: compares `SAMPLE_CORPUS_VERSION` marker on disk to settings; on mismatch, deletes `sample_*` vectors in that collection, rewrites marker, then ingests each `data/sample_docs/*.txt` as `sample_<stem>`. The **public** collection is empty until you run **`scripts/bulk_index_public.py`** or **`scripts/build_public_corpus.py`** (or `POST /api/v1/ingest` with `library=public`).
+**Lifespan (`app/main.py`):** On startup, constructs `OllamaClient`, one shared **`chromadb.PersistentClient`** on `CHROMA_PERSIST_DIR`, then an **`EmbeddingRegistry`** with two **`ChromaEmbeddingService`** wrappers (papers + public collections) and two **`RAGService`** instances (`content_library` each). Sharing one client avoids double-opening the same SQLite store. Optionally runs **`seed_sample_docs`** into the **papers** collection only when **`SEED_SAMPLE_DOCS=true`**: compares `SAMPLE_CORPUS_VERSION` marker on disk to settings; on mismatch, deletes `sample_*` vectors in that collection, rewrites marker, then ingests each `data/sample_docs/*.txt` as `sample_<stem>`. The **public** collection is empty until you run **`scripts/bulk_index_public.py`** or **`scripts/build_public_corpus.py`** (or `POST /api/v1/ingest` with `library=public`).
 
 **Routers** mount under `/api/v1` except health routes at root.
 
@@ -194,6 +195,18 @@ Full **FLARE** ([Jiang et al., arXiv:2305.06983](https://arxiv.org/abs/2305.0698
 5. **Merge** reranked lists by chunk identity, keeping the **better** (lower) distance per chunk; re-run threshold, fallback, and diversity on the merged set.  
 6. Final synthesis uses merged chunks. Response fields `flare_enabled` and `flare_followup_retrieval` record what occurred.
 
+### 8.1 Alternatives considered (and why this FLARE-shaped path)
+
+| Approach | Idea | Why it is not the default here |
+|----------|------|--------------------------------|
+| **Token-level FLARE** (paper-faithful) | Use per-token confidence from the generator to trigger retrieval mid-stream. | **Ollama’s `/api/chat` does not expose logprobs**; wiring OpenAI logprobs would fork the inference abstraction. |
+| **HyDE** | LLM hallucinates a hypothetical document; embed that for retrieval. | Extra latency + **hallucinated retrieval queries** can pollute dense search on technical corpora unless heavily guarded. |
+| **Multi-query / RAG-Fusion** | LLM emits several sub-queries; retrieve per query; fuse (RRF). | Strong for recall; **cost and latency scale with query count**; harder to explain citations per sub-query in a portfolio UI. |
+| **Self-RAG / CRAG** | Model judges “is retrieval needed?” and quality of hits; may rewrite queries. | Heavier **orchestration and eval surface**; many steps for a local single-GPU demo. |
+| **Re-ranker only** (cross-encoder) | Keep one retrieval pass; rerank with a second model. | Excellent production pattern; **not bundled** to keep the stack Ollama-centric and CPU-light for reviewers cloning cold. |
+
+**Why FLARE-shaped active retrieval anyway:** It is **literature-grounded** (easy to cite Jiang et al. in interviews), **bounded** (one draft call + at most one follow-up search), and **honest about constraints** (draft uses `???` / hedges instead of fake logprobs). It demonstrates you understand **when to stop retrieving** and how to **merge evidence** from two passes—without pretending the host is a commercial API.
+
 ---
 
 ## 9. HTTP API
@@ -255,7 +268,8 @@ Applied in `app/main.py` (order matters for FastAPI / Starlette):
 
 - **Request correlation** — Every response carries `X-Request-ID`; access logs include `request_id`, method, path, status, `duration_ms`.  
 - **Structured logs** — `LOG_JSON=true` for log platforms.  
-- **Healthchecks** — Docker Compose defines an HTTP probe against `/health/live` (see `docker-compose.yml`). Prefer `/health/ready` for LB routing when Ollama and Chroma must be live.
+- **Healthchecks** — Docker Compose defines an HTTP probe against `/health/live` (see `docker-compose.yml`). Prefer `/health/ready` for LB routing when Ollama and Chroma must be live.  
+- **Chroma persist corruption (development)** — If opening the store raises a recoverable Chroma/Rust error (`APP_ENV=development`), the API **renames** `CHROMA_PERSIST_DIR` to a sibling `*.broken.<UTC>` folder, then **exits startup with `RuntimeError`**. **Restart the process once** so a fresh Python interpreter opens the new empty directory (PyO3 panics can poison in-process bindings; an immediate re-open in the same process is unsafe). Production/staging surfaces the error without renaming.
 
 ---
 
@@ -317,9 +331,10 @@ Not implemented in this repository (non-exhaustive):
 - **SSO** / OIDC for the API or UI.  
 - **OCR** pipeline for low-quality scanned PDFs beyond basic text extraction.  
 - **Hosted** managed vector SaaS swap (Pinecone, Weaviate, etc.) — would replace `ChromaEmbeddingService` while preserving router contracts.  
-- **Token-level FLARE** — requires a host that exposes logprobs or an alternative uncertainty model.
+- **Token-level FLARE** — requires a host that exposes logprobs or an alternative uncertainty model.  
+- **Chroma auto-quarantine** — development-only; requires **one manual restart** after a bad on-disk store is moved aside (see [§12](#12-observability-and-reliability)).
 
-Natural extensions: swap Ollama for OpenAI/Azure OpenAI behind the same `RAGService` boundary; add golden-set eval CI; wire `/health/ready` to load balancers.
+Natural extensions: swap Ollama for OpenAI/Azure OpenAI behind the same `RAGService` boundary; add golden-set eval CI; wire `/health/ready` to load balancers; add cross-encoder reranking as an optional second stage.
 
 ---
 
@@ -344,7 +359,39 @@ Or directly: `.\.venv\Scripts\python scripts\capture_dashboard_playwright.py --h
 ## 18. References
 
 - Jiang et al., *Active Retrieval Augmented Generation (FLARE)*, [arXiv:2305.06983](https://arxiv.org/abs/2305.06983).  
+- Gao et al., *Precise Zero-Shot Dense Retrieval without Relevance Labels* (HyDE), [arXiv:2212.10496](https://arxiv.org/abs/2212.10496).  
 - FastAPI, Pydantic v2, ChromaDB, LangChain text splitters, Ollama HTTP API.
+
+---
+
+## 19. Interview narrative: quality bar, challenges, and retrieval design
+
+### What this repo actually proves
+
+- **Senior IC–level system design:** dual corpora (`library` routing), explicit provenance on chunks, **live vs ready** health, optional API key, structured errors with `request_id`, Docker + Compose, regression tests that **do not** require GPU clusters in CI.  
+- **RAG depth beyond “call OpenAI”:** retrieval budget by mode, keyword rerank, diversity cap, fallback when the strict distance filter starves, optional **second retrieval pass** with merge semantics, deterministic `datasets` mode for grounded extraction without generative drift.
+
+### Where it is *not* “FAANG production” (say this confidently)
+
+- **Single-tenant / no row-level ACL**, no SSO, no rate limiting or quota service, no multi-region active-active.  
+- **Ollama-centric** inference: great for reproducible demos; production would likely pin **vendor APIs** or **vLLM** behind autoscaling with SLO dashboards.  
+- **Chroma embedded SQLite** on disk: fine for many products; hyperscale teams often move vectors to **managed** stores (e.g. Pinecone, Weaviate Cloud, Aurora pgvector) with backup/restore runbooks.  
+- **CI does not run** full embedding + LLM golden paths—by design for cost; **live** `scripts/run_query_eval.py` is the operator’s integration check.
+
+### Challenges you can talk through (STAR-friendly)
+
+1. **Dual library without doubling connections** — Two logical indexes, one `PersistentClient`, two collections; avoids subtle SQLite / Rust binding issues from opening the same path twice.  
+2. **Chroma 1.x + legacy on-disk stores** — Upstream issues (e.g. chroma-core/chroma#5909) can surface as **Rust panics**; development path **quarantines** the directory and **forces a restart** so the interpreter is not left with poisoned native bindings after PyO3 failure.  
+3. **Active retrieval without logprobs** — Full FLARE is token-conditional; this stack uses a **draft + lexical/regex uncertainty gate** (`flare_triggers_follow_up`) so behavior stays testable and bounded.  
+4. **Evaluating RAG without flaky LLM output in CI** — `tests/test_rag_query_suite.py` uses a **deterministic stub** for chat and a ranking-aware fake embedding layer so structural expectations stay stable.
+
+### Sound-bites for “why not only FLARE / what else did you consider?”
+
+Point to [§8.1](#81-alternatives-considered-and-why-this-flare-shaped-path): HyDE, multi-query fusion, rerank-only, self-RAG/CRAG vs **bounded FLARE-shaped** retrieval under **local API constraints**.
+
+### If you want this to read even more “hire me” in the next iteration
+
+Prioritize a **short design doc PR**: cross-encoder rerank behind a flag, **OpenTelemetry** spans on retrieve vs generate, **Ragas** or similar on a frozen eval JSONL, and a **one-page SLO table** (p95 latency, error budget). Those are high signal per line of code for staff+ loops.
 
 ---
 

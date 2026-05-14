@@ -140,12 +140,19 @@ async def lifespan(_: FastAPI):
         if settings.APP_ENV != "development" or not _chroma_load_is_recoverable(exc):
             raise
         logger.error(
-            "Chroma could not open %s (%s). Recovering once (APP_ENV=development): quarantining persist dir.",
+            "Chroma could not open %s (%s). APP_ENV=development: quarantining persist dir.",
             settings.CHROMA_PERSIST_DIR,
             exc,
         )
         _quarantine_chroma_persist_dir(Path(settings.CHROMA_PERSIST_DIR))
-        papers_svc, public_svc = _init_chroma_pair()
+        # Chroma's Rust bindings can be left in a bad state after a PyO3 panic; do not open a new
+        # PersistentClient in this process. Operator must restart once so a fresh interpreter attaches
+        # to the new empty directory (see chroma-core/chroma#5909 and similar).
+        raise RuntimeError(
+            "Chroma on-disk store was unreadable (version skew, partial write, or corruption). "
+            f"It was renamed beside `{Path(settings.CHROMA_PERSIST_DIR).name}` as `*.broken.*`. "
+            "Restart the DocuMind process to initialize a fresh store, then re-index corpora."
+        ) from exc
     rag_papers = RAGService(
         embedding_service=papers_svc,
         ollama_client=ollama_client,

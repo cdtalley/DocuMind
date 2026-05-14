@@ -2,6 +2,7 @@ __pycache__/
 *.pyc
 .env
 chroma_db/
+chroma_db.broken.*/
 *.pdf
 *.docx
 data/sample_docs/*.pdf
