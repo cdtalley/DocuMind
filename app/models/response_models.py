@@ -22,6 +22,10 @@ class AnswerResponse(BaseModel):
     query_mode: str
     model_used: str
     chunks_searched: int
+    library: str = Field(
+        default="public",
+        description="Indexed corpus: public (encyclopedia-scale) or papers (research PDFs).",
+    )
     flare_enabled: bool = False
     flare_followup_retrieval: bool = Field(
         default=False,
@@ -43,6 +47,14 @@ class CollectionStats(BaseModel):
     total_chunks: int
     paper_count: int
     collection_name: str
+
+
+class LibrariesResponse(BaseModel):
+    """Snapshot of both vector collections for ops dashboards and capacity planning."""
+
+    public: CollectionStats
+    papers: CollectionStats
+    default_library: str = Field(description="API default when library is omitted on query/ingest.")
 
 
 class HealthResponse(BaseModel):

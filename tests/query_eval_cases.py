@@ -1,12 +1,21 @@
 """
 Twenty RAG query cases for regression + metrics (paired with tests/test_rag_query_suite.py).
 
-Tags: contract, retrieval, modes, edge — use for interviews / design reviews.
+Contract tiers (single source of truth for pytest + scripts/run_query_eval.py):
+- http: status line only (smoke against unknown corpora).
+- structural: AnswerResponse shape, query_mode echo, confidence/chunks invariants (staging smoke).
+- full: golden expectations (has_answer, source counts, answer_substrings) — requires a corpus
+  aligned with the case definitions (seed_eval_corpus in CI; or a pinned eval library in prod).
+
+Interview hooks encoded here: compare-mode retrieval collapse, section filters, FLARE second pass,
+injection-shaped queries, long-query caps, diversity-forcing compare cases.
 """
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Literal
+
+EvalTier = Literal["http", "structural", "full"]
 
 
 @dataclass(frozen=True)
@@ -253,4 +262,76 @@ def metrics_from_response(status: int, body: dict[str, Any], elapsed_ms: float) 
         "flare_enabled": body.get("flare_enabled"),
         "flare_followup": body.get("flare_followup_retrieval"),
         "query_mode": body.get("query_mode"),
+        "library": body.get("library"),
     }
+
+
+def eval_case_violations(
+    case: QueryEvalCase,
+    http_status: int,
+    body: Any,
+    *,
+    tier: EvalTier,
+) -> list[str]:
+    """
+    Return human-readable contract violations (empty list => pass for this tier).
+
+    Keeps live HTTP eval, offline pytest, and future CI exporters aligned on the same rules.
+    """
+    violations: list[str] = []
+    if http_status != case.expect_status:
+        violations.append(f"http_status={http_status} expected={case.expect_status}")
+
+    if tier == "http":
+        return violations
+
+    if http_status != 200:
+        return violations
+
+    if not isinstance(body, dict):
+        violations.append("body_not_object")
+        return violations
+
+    if "query_mode" not in body or "sources" not in body:
+        violations.append("not_answer_response_shape")
+        return violations
+
+    if body.get("query_mode") != case.query_mode:
+        violations.append(f"query_mode={body.get('query_mode')!r} expected={case.query_mode!r}")
+
+    try:
+        conf = float(body.get("confidence", 0))
+    except (TypeError, ValueError):
+        violations.append("confidence_not_numeric")
+    else:
+        if not (0.0 <= conf <= 1.0):
+            violations.append(f"confidence_out_of_range={conf}")
+
+    try:
+        chunks = int(body.get("chunks_searched", -1))
+    except (TypeError, ValueError):
+        violations.append("chunks_searched_not_int")
+    else:
+        if chunks < 0:
+            violations.append(f"chunks_searched_negative={chunks}")
+
+    if tier != "full":
+        return violations
+
+    if case.expect_has_answer is not None:
+        if body.get("has_answer") is not case.expect_has_answer:
+            violations.append(f"has_answer={body.get('has_answer')!r} expected={case.expect_has_answer!r}")
+
+    src = body.get("sources") or []
+    n_src = len(src) if isinstance(src, list) else -1
+    if n_src < 0:
+        violations.append("sources_not_list")
+    elif not (case.min_sources <= n_src <= case.max_sources):
+        violations.append(f"n_sources={n_src} not_in_[{case.min_sources},{case.max_sources}]")
+
+    ans = body.get("answer") or ""
+    for sub in case.answer_substrings:
+        if sub not in ans:
+            violations.append(f"missing_answer_substring={sub!r}")
+
+    return violations

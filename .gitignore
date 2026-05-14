@@ -10,3 +10,9 @@ data/sample_docs/*.pdf
 venv/
 web/node_modules/
 web/.next/
+
+# Operator-built Wikipedia text shards and bulk-index checkpoints (large / local)
+data/wiki_txt/
+data/wiki_txt_build/
+data/.bulk_public_checkpoint.json
+data/.bulk_*checkpoint*.json

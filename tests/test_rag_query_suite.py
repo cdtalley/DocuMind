@@ -11,12 +11,13 @@ from typing import Any
 import pytest
 from fastapi.testclient import TestClient
 
-from app.main import app, get_document_service, get_embedding_service, get_ollama_client, get_rag_service
+from app.main import app, get_document_service, get_embedding_registry, get_ollama_client
 from app.services.document_service import DocumentService
+from app.services.embedding_registry import EmbeddingRegistry
 from app.services.rag_service import RAGService
 from app.utils.chunker import DocumentChunker
 
-from tests.query_eval_cases import QUERY_EVAL_CASES, QueryEvalCase
+from tests.query_eval_cases import QUERY_EVAL_CASES, QueryEvalCase, eval_case_violations
 from tests.ranking_fake_embedding import RankingFakeEmbeddingService, seed_eval_corpus
 
 
@@ -47,10 +48,17 @@ def _make_client(embedding: RankingFakeEmbeddingService) -> TestClient:
     ollama = DeterministicOllama()
     from app.config import get_settings
 
-    rag = RAGService(embedding, ollama, get_settings())
-    app.dependency_overrides[get_embedding_service] = lambda: embedding
+    settings = get_settings()
+    rag_papers = RAGService(embedding, ollama, settings, content_library="papers")
+    rag_public = RAGService(embedding, ollama, settings, content_library="public")
+    reg = EmbeddingRegistry(
+        papers=embedding,  # type: ignore[arg-type]
+        public=embedding,  # type: ignore[arg-type]
+        rag_papers=rag_papers,
+        rag_public=rag_public,
+    )
+    app.dependency_overrides[get_embedding_registry] = lambda: reg
     app.dependency_overrides[get_document_service] = lambda: document
-    app.dependency_overrides[get_rag_service] = lambda: rag
     app.dependency_overrides[get_ollama_client] = lambda: ollama
     return TestClient(app)
 
@@ -63,6 +71,7 @@ def test_query_eval_case(case: QueryEvalCase) -> None:
     client = _make_client(emb)
     payload = {
         "query": case.query,
+        "library": "papers",
         "top_k": case.top_k,
         "query_mode": case.query_mode,
         "section_filter": case.section_filter,
@@ -75,21 +84,9 @@ def test_query_eval_case(case: QueryEvalCase) -> None:
     finally:
         app.dependency_overrides.clear()
 
-    assert response.status_code == case.expect_status, f"{case.id}: {response.text}"
     body = response.json()
-    assert body["query_mode"] == case.query_mode
-
-    if case.expect_has_answer is not None:
-        assert body["has_answer"] is case.expect_has_answer, case.id
-
-    src = body.get("sources") or []
-    assert case.min_sources <= len(src) <= case.max_sources, f"{case.id} sources={len(src)}"
-
-    for sub in case.answer_substrings:
-        assert sub in (body.get("answer") or ""), f"{case.id} missing {sub!r} in answer"
-
-    assert body.get("chunks_searched", 0) >= 0
-    assert 0.0 <= float(body.get("confidence", 0)) <= 1.0
+    viol = eval_case_violations(case, response.status_code, body, tier="full")
+    assert not viol, f"{case.id}: " + "; ".join(viol) + f" | body={response.text[:500]}"
 
     # Soft perf guard: synthetic stack should stay fast (adjust if CI machines regress)
     assert elapsed_ms < 8000.0, f"{case.id} slow: {elapsed_ms:.0f}ms"

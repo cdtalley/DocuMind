@@ -17,6 +17,7 @@ from app.config import get_settings
 from app.logging_config import configure_logging
 from app.models.response_models import CollectionStats, HealthResponse, LivenessResponse, ReadinessResponse
 from app.services.document_service import DocumentService
+from app.services.embedding_registry import EmbeddingRegistry
 from app.services.embedding_service import ChromaEmbeddingService
 from app.services.rag_service import RAGService
 from app.utils.chunker import DocumentChunker
@@ -26,14 +27,18 @@ settings = get_settings()
 configure_logging(use_json=settings.LOG_JSON, level_name=settings.LOG_LEVEL)
 logger = logging.getLogger("documind")
 ollama_client: OllamaClient | None = None
-embedding_service: ChromaEmbeddingService | None = None
+embedding_registry: EmbeddingRegistry | None = None
 document_service: DocumentService | None = None
-rag_service: RAGService | None = None
 
 
-def seed_sample_docs() -> None:
-    global document_service, embedding_service
-    assert document_service is not None and embedding_service is not None
+def seed_sample_docs(registry: EmbeddingRegistry) -> None:
+    """Optional legacy bundle: synthetic DS briefs into the *papers* collection only."""
+    global document_service
+    assert document_service is not None
+    if not settings.SEED_SAMPLE_DOCS:
+        logger.info("SEED_SAMPLE_DOCS=false: skipping bundled sample_docs indexing.")
+        return
+    emb = registry.papers
     if ollama_client is None or not ollama_client.health_check().get("available", False):
         logger.info("Skipping sample doc indexing because Ollama is unavailable.")
         return
@@ -50,47 +55,69 @@ def seed_sample_docs() -> None:
 
     if current_version != target_version:
         logger.info(
-            "Sample corpus version %s -> %s: refreshing bundled `sample_*` papers.",
+            "Sample corpus version %s -> %s: refreshing bundled `sample_*` papers in papers collection.",
             current_version or "(none)",
             target_version,
         )
-        for paper in list(embedding_service.list_papers()):
+        for paper in list(emb.list_papers()):
             if str(paper.get("doc_id", "")).startswith("sample_"):
-                embedding_service.delete_document(paper["doc_id"])
+                emb.delete_document(paper["doc_id"])
         marker.write_text(target_version, encoding="utf-8")
 
     for sample_file in sorted(sample_dir.glob("*.txt")):
         if sample_file.name.startswith("."):
             continue
         doc_id = f"sample_{sample_file.stem}"
-        existing = [paper for paper in embedding_service.list_papers() if paper["doc_id"] == doc_id]
+        existing = [paper for paper in emb.list_papers() if paper["doc_id"] == doc_id]
         if existing:
             continue
         file_bytes = sample_file.read_bytes()
         docs, _ = document_service.process(file_bytes, sample_file.name, doc_id)
-        embedding_service.add_documents(docs, doc_id)
+        emb.add_documents(docs, doc_id)
         logger.info("Seeded sample paper: %s", sample_file.name)
 
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
-    global ollama_client, embedding_service, document_service, rag_service
+    global ollama_client, embedding_registry, document_service
     chunker = DocumentChunker(chunk_size=settings.CHUNK_SIZE, chunk_overlap=settings.CHUNK_OVERLAP)
     ollama_client = OllamaClient(
         base_url=settings.OLLAMA_BASE_URL,
         llm_model=settings.LLM_MODEL,
         embedding_model=settings.EMBEDDING_MODEL,
     )
-    embedding_service = ChromaEmbeddingService(
+    papers_svc = ChromaEmbeddingService(
         persist_dir=settings.CHROMA_PERSIST_DIR,
         collection_name=settings.CHROMA_COLLECTION_NAME,
         ollama_client=ollama_client,
     )
+    public_svc = ChromaEmbeddingService(
+        persist_dir=settings.CHROMA_PERSIST_DIR,
+        collection_name=settings.CHROMA_COLLECTION_PUBLIC,
+        ollama_client=ollama_client,
+    )
+    rag_papers = RAGService(
+        embedding_service=papers_svc,
+        ollama_client=ollama_client,
+        settings=settings,
+        content_library="papers",
+    )
+    rag_public = RAGService(
+        embedding_service=public_svc,
+        ollama_client=ollama_client,
+        settings=settings,
+        content_library="public",
+    )
+    embedding_registry = EmbeddingRegistry(
+        papers=papers_svc,
+        public=public_svc,
+        rag_papers=rag_papers,
+        rag_public=rag_public,
+    )
     document_service = DocumentService(chunker=chunker)
-    rag_service = RAGService(embedding_service=embedding_service, ollama_client=ollama_client, settings=settings)
     logger.info("Ollama health: %s", ollama_client.health_check())
     try:
-        seed_sample_docs()
+        seed_sample_docs(embedding_registry)
     except Exception as exc:
         logger.warning("Failed to seed sample docs: %s", exc)
     yield
@@ -103,8 +130,8 @@ _redoc_url = None if settings.DISABLE_OPENAPI else "/redoc"
 
 app = FastAPI(
     title="DocuMind",
-    description="Data Science Research Paper Intelligence — powered by local Ollama. Zero API costs.",
-    version="1.0.0",
+    description="Production-style local RAG — dual-index (public Wikipedia-scale + research papers), Ollama embeddings/LLM.",
+    version="1.1.0",
     lifespan=lifespan,
     openapi_url=_openapi_url,
     docs_url=_docs_url,
@@ -188,9 +215,15 @@ def get_ollama_client() -> OllamaClient:
     return ollama_client
 
 
-def get_embedding_service() -> ChromaEmbeddingService:
-    assert embedding_service is not None
-    return embedding_service
+def get_embedding_registry() -> EmbeddingRegistry:
+    assert embedding_registry is not None
+    return embedding_registry
+
+
+def get_embedding_service(
+    registry: EmbeddingRegistry = Depends(get_embedding_registry),
+) -> ChromaEmbeddingService:
+    return registry.embedding(settings.DEFAULT_LIBRARY)
 
 
 def get_document_service() -> DocumentService:
@@ -198,9 +231,16 @@ def get_document_service() -> DocumentService:
     return document_service
 
 
-def get_rag_service() -> RAGService:
-    assert rag_service is not None
-    return rag_service
+def get_rag_service(
+    registry: EmbeddingRegistry = Depends(get_embedding_registry),
+) -> RAGService:
+    return registry.rag(settings.DEFAULT_LIBRARY)
+
+
+def get_papers_embedding_service(
+    registry: EmbeddingRegistry = Depends(get_embedding_registry),
+) -> ChromaEmbeddingService:
+    return registry.papers
 
 
 from app.routers import arxiv, ingest, papers, query  # noqa: E402
@@ -262,9 +302,11 @@ async def health_ready(
 @app.get("/")
 async def root() -> dict:
     return {
-        "message": "DocuMind API",
+        "message": "DocuMind API — dual-library RAG (public + papers)",
         "docs": None if settings.DISABLE_OPENAPI else "/docs",
         "health": "/health",
         "health_live": "/health/live",
         "health_ready": "/health/ready",
+        "libraries": {"public": settings.CHROMA_COLLECTION_PUBLIC, "papers": settings.CHROMA_COLLECTION_NAME},
+        "default_library": settings.DEFAULT_LIBRARY,
     }

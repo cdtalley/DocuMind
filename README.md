@@ -1,6 +1,6 @@
 # DocuMind — Technical Reference
 
-DocuMind is a **local-first retrieval-augmented generation (RAG)** system for technical and research document libraries. Documents are **ingested**, **chunked**, **embedded** into **ChromaDB** (cosine space), and **queried** through a **FastAPI** surface. Answers are **grounded** on retrieved passages, returned with **structured citations**, and shaped by **mode-specific** generation policies. Default **LLM and embedding inference** run via **Ollama** on operator-controlled hardware.
+DocuMind is a **local-first retrieval-augmented generation (RAG)** system with **two Chroma collections**: a **public** index (default; Wikipedia-scale text via offline bulk jobs) and a **papers** index (PDFs, DOCX, `.txt`, arXiv). Documents are **ingested**, **chunked**, **embedded** into **ChromaDB** (cosine space), and **queried** through **FastAPI** with a per-request **`library`** field. Answers are **grounded** on retrieved passages, returned with **structured citations**, and shaped by **mode-specific** (and library-aware) generation policies. Default **LLM and embedding inference** run via **Ollama** on operator-controlled hardware.
 
 This document specifies **architecture**, **control flows**, **configuration**, and **operational behavior** sufficient for engineering review, extension, and production hardening.
 
@@ -37,7 +37,7 @@ This document specifies **architecture**, **control flows**, **configuration**, 
 | **Application** | FastAPI application (`app/main.py`): routing, middleware, dependency injection, lifespan-managed singletons. |
 | **Domain services** | Document parsing and chunking (`app/services/document_service.py`, `app/utils/chunker.py`); vector persistence (`app/services/embedding_service.py`); RAG orchestration (`app/services/rag_service.py`). |
 | **Model I/O** | Ollama client (`app/utils/ollama_client.py`): chat completions and per-text embeddings over HTTP. |
-| **Persistence** | Chroma persistent client on disk (`CHROMA_PERSIST_DIR`); collection metadata uses **cosine** distance (`hnsw:space: cosine`). |
+| **Persistence** | Chroma persistent client on disk (`CHROMA_PERSIST_DIR`); **two** collections — `CHROMA_COLLECTION_PUBLIC` (encyclopedia-scale) and `CHROMA_COLLECTION_NAME` (papers / PDFs). Cosine space (`hnsw:space: cosine`). |
 
 **Ports (convention):** API **8001**, Next.js dev **3002**, Ollama **11434**.
 
@@ -113,7 +113,7 @@ flowchart TB
   E --> C
 ```
 
-**Lifespan (`app/main.py`):** On startup, constructs `OllamaClient`, `ChromaEmbeddingService`, `DocumentService`, `RAGService`. Runs `seed_sample_docs()` when Ollama is healthy: compares `SAMPLE_CORPUS_VERSION` marker on disk to settings; on mismatch, deletes `sample_*` vectors, rewrites marker, then ingests each `data/sample_docs/*.txt` as `sample_<stem>`.
+**Lifespan (`app/main.py`):** On startup, constructs `OllamaClient`, an **`EmbeddingRegistry`** with two `ChromaEmbeddingService` instances (public + papers) and two `RAGService` instances (`content_library` each). Optionally runs **`seed_sample_docs`** into the **papers** collection only when **`SEED_SAMPLE_DOCS=true`**: compares `SAMPLE_CORPUS_VERSION` marker on disk to settings; on mismatch, deletes `sample_*` vectors in that collection, rewrites marker, then ingests each `data/sample_docs/*.txt` as `sample_<stem>`. The **public** collection is empty until you run **`scripts/bulk_index_public.py`** or **`scripts/build_public_corpus.py`** (or `POST /api/v1/ingest` with `library=public`).
 
 **Routers** mount under `/api/v1` except health routes at root.
 
@@ -123,12 +123,12 @@ flowchart TB
 
 ### 5.1 Ingestion
 
-- **Input:** `POST /api/v1/ingest` (multipart file) or `POST /api/v1/fetch-arxiv` (JSON `arxiv_id`).  
+- **Input:** `POST /api/v1/ingest` (`multipart/form-data`: file + optional `library` field, default **`public`**) or `POST /api/v1/fetch-arxiv` (JSON `arxiv_id`; always indexes **papers**).  
 - **Validation:** File size cap `MAX_FILE_SIZE_MB`; MIME/type checks in ingest router / document service.  
 - **Extraction:** PyPDF2 for PDF, python-docx for DOCX, raw decode for `.txt`.  
 - **Metadata:** Heuristic title, authors, year, optional arXiv id from leading text when parseable.  
 - **Chunking:** `DocumentChunker` uses LangChain `RecursiveCharacterTextSplitter` with `CHUNK_SIZE` and `CHUNK_OVERLAP`. Each `langchain_core.documents.Document` carries metadata: `doc_id`, `filename`, `section` (heuristic), `chunk_index`, `page_number` when known, etc.  
-- **Indexing:** `ChromaEmbeddingService.add_documents` embeds each chunk via Ollama `EMBEDDING_MODEL`, writes to Chroma with stable ids `{doc_id}_{i}` and metadata including `doc_id` for deletion and listing.
+- **Indexing:** `ChromaEmbeddingService.add_documents` (HTTP path) or **`add_indexed_batch`** (bulk indexer) embeds chunks via Ollama `EMBEDDING_MODEL`, writes to the selected collection with stable ids `{doc_id}_{i}`. Each chunk metadata is stamped with **`embedding_model`**, **`chroma_collection`**, and **`indexed_at`** (UTC) for re-embed and drift workflows.  
 
 ### 5.2 Deletion semantics
 
@@ -136,7 +136,7 @@ flowchart TB
 
 ### 5.3 Vector space
 
-Chroma collection is created with `metadata={"hnsw:space": "cosine"}`. Query results expose **distance** per hit; the RAG layer sorts ascending (**lower distance = closer match**) and keeps rows with **`distance < RELEVANCE_THRESHOLD`** before optional fallback (threshold is a tunable cutoff on this distance scale for your embedding model and corpus).
+Each Chroma collection is created with `metadata={"hnsw:space": "cosine"}`. Query results expose **distance** per hit; the RAG layer sorts ascending (**lower distance = closer match**) and keeps rows with **`distance < RELEVANCE_THRESHOLD`** before optional fallback (threshold is a tunable cutoff on this distance scale for your embedding model and corpus).
 
 ---
 
@@ -162,7 +162,7 @@ For a user `top_k` and `query_mode`, the service expands the **vector search** `
 ### 6.3 Generation
 
 - **`datasets` mode:** Does **not** call the LLM for the main body. It scans retrieved chunk text for known dataset hints and patterns, emits a structured Markdown inventory. FLARE is **skipped**.  
-- **Other modes:** Builds a single context block from selected chunks, applies the mode’s system prompt from `SYSTEM_PROMPTS`, calls `OllamaClient.chat` with mode-dependent temperature, returns Markdown answer plus `SourceCitation` list.  
+- **Other modes:** Builds a single context block from selected chunks, applies the mode’s system prompt (`SYSTEM_PROMPTS` for **papers**, `PUBLIC_SYSTEM_PROMPTS` for **public**), calls `OllamaClient.chat` with mode-dependent temperature, returns Markdown answer plus `SourceCitation` list.  
 - **Confidence:** Derived from mean chunk distance (clamped); exposed as a scalar for UI.
 
 ---
@@ -200,17 +200,18 @@ Full **FLARE** ([Jiang et al., arXiv:2305.06983](https://arxiv.org/abs/2305.0698
 
 | Method | Path | Body / params | Notes |
 |--------|------|---------------|--------|
-| GET | `/health` | — | Ollama availability + collection stats. |
+| GET | `/health` | — | Ollama availability + stats for **`DEFAULT_LIBRARY`** collection. |
 | GET | `/health/live` | — | Process liveness. |
 | GET | `/health/ready` | — | **503** if dependencies not ready. |
-| POST | `/api/v1/ingest` | `multipart/form-data` file | Returns ingest stats JSON. |
-| DELETE | `/api/v1/ingest/{doc_id}` | — | **404** if no chunks. |
-| POST | `/api/v1/fetch-arxiv` | `{ "arxiv_id": "..." }` | Downloads PDF, ingests. |
-| POST | `/api/v1/query` | `QueryRequest` JSON | See `app/models/request_models.py`. |
-| GET | `/api/v1/papers` | — | Library cards. |
-| GET | `/api/v1/papers/{doc_id}` | — | One document. |
-| DELETE | `/api/v1/papers/{doc_id}` | — | **404** if no chunks. |
-| GET | `/api/v1/collection/stats` | — | Aggregate counts. |
+| GET | `/api/v1/libraries` | — | **Both** collections’ `CollectionStats` + `default_library` (ops / capacity). |
+| POST | `/api/v1/ingest` | `multipart/form-data`: `file`, optional `library` | Indexes into **public** or **papers**. |
+| DELETE | `/api/v1/ingest/{doc_id}` | Query `?library=` (default `public`) | **404** if no chunks. |
+| POST | `/api/v1/fetch-arxiv` | `{ "arxiv_id": "..." }` | Downloads PDF; indexes **papers** only. |
+| POST | `/api/v1/query` | `QueryRequest` JSON (`library` default `public`) | See `app/models/request_models.py`. |
+| GET | `/api/v1/papers` | Query `?library=` | Library cards. |
+| GET | `/api/v1/papers/{doc_id}` | Query `?library=` | One document. |
+| DELETE | `/api/v1/papers/{doc_id}` | Query `?library=` | **404** if no chunks. |
+| GET | `/api/v1/collection/stats` | Query `?library=` | Aggregate counts for one collection. |
 
 **OpenAPI:** `/docs`, `/redoc`, `/openapi.json` unless `DISABLE_OPENAPI=true`.
 
@@ -225,11 +226,11 @@ All keys are listed in **`.env.example`**. Grouped reference:
 | Group | Variables | Purpose |
 |-------|-----------|---------|
 | **Models** | `OLLAMA_BASE_URL`, `LLM_MODEL`, `EMBEDDING_MODEL` | Inference endpoints and model tags. |
-| **Vector store** | `CHROMA_PERSIST_DIR`, `CHROMA_COLLECTION_NAME` | On-disk path and logical collection. |
+| **Vector store** | `CHROMA_PERSIST_DIR`, `CHROMA_COLLECTION_NAME`, `CHROMA_COLLECTION_PUBLIC`, `DEFAULT_LIBRARY` | On-disk path; **papers** vs **public** collection names; default `library` for `/health` stats. |
 | **Chunking** | `CHUNK_SIZE`, `CHUNK_OVERLAP` | Text splitter parameters; affects chunk count and context granularity. |
 | **Retrieval defaults** | `TOP_K_RESULTS`, `RELEVANCE_THRESHOLD`, `ENABLE_FALLBACK_RETRIEVAL`, `FALLBACK_TOP_N`, `KEYWORD_RERANK_WEIGHT` | Global defaults; per-request `top_k` overrides for query. |
 | **Ingest** | `MAX_FILE_SIZE_MB`, `ARXIV_BASE_URL` | Upload cap and arXiv PDF export host. |
-| **Sample corpus** | `SAMPLE_CORPUS_VERSION` | Bump to purge and re-seed all `sample_*` docs on startup. |
+| **Sample corpus** | `SAMPLE_CORPUS_VERSION`, `SEED_SAMPLE_DOCS` | Bump version to purge/re-seed `sample_*` in **papers** when `SEED_SAMPLE_DOCS=true`. |
 | **Network** | `CORS_ORIGINS`, `CORS_ALLOW_ALL`, `TRUSTED_HOSTS` | Browser and Host-header policy. |
 | **App** | `APP_ENV`, `DISABLE_OPENAPI` | Environment label; docs toggle. |
 | **Security / transport** | `API_KEY`, `ENABLE_RESPONSE_GZIP` | Optional API key gate; gzip responses. |
@@ -270,12 +271,27 @@ Applied in `app/main.py` (order matters for FastAPI / Starlette):
 
 ---
 
-## 14. Bundled corpus and scripts
+## 14. Bundled corpus, public scale, and scripts
 
-- **`data/sample_docs/`** — Approximately **460** UTF-8 technical briefs: curated landmark-style summaries plus **400** deterministic synthetic papers `sample_corpus_p7_*.txt` generated by `scripts/generate_production_corpus.py`. Expect on the order of **5k–10k** chunks at default `CHUNK_SIZE=800` after full ingest.  
-- **Regeneration:** `python scripts/generate_production_corpus.py --count 500 --force` then bump `SAMPLE_CORPUS_VERSION` again so startup purges old `sample_*` rows.  
-- **Hand-authored expansion:** `scripts/materialize_institutional_corpus.py` adds named institutional-style briefs (skips existing filenames).  
-- **arXiv bulk:** `scripts/bulk_ingest_arxiv.py` + `data/arxiv_seed_list.txt`.
+### What ships in git (small)
+
+- **`data/sample_docs/`** — On the order of **~460** UTF-8 files (~**1 MB** text): curated summaries plus **400** synthetic `sample_corpus_p7_*.txt` from `scripts/generate_production_corpus.py`. This is **not** a massive real-world KB; it is optional demo material for the **papers** collection when `SEED_SAMPLE_DOCS=true`.  
+- **Chroma in the repo clone** — Often **tens of MB** after local indexing; size grows with **chunk count × (vectors + stored text + HNSW)**. Empty **public** collection adds negligible disk until you bulk-index.
+
+### Making the **public** corpus massive (operator job)
+
+1. **`pip install datasets`** (for Hugging Face streaming).  
+2. **One command (stream + bulk index):**  
+   `python scripts/build_public_corpus.py --articles 10000`  
+   Use `--articles 50000` or higher for serious scale; `--articles 0 --allow-unbounded` streams the full dump (disk-hungry).  
+3. **Piecemeal:** `scripts/stream_wikipedia_to_txt.py` → `scripts/bulk_index_public.py` (`--dry-run` for chunk estimates, `--checkpoint` for resume, `--workers` for parallel Ollama embeds).  
+4. **Ops:** `GET /api/v1/libraries` for both collections’ chunk and document counts.
+
+### Other scripts
+
+- **Regeneration (papers bundle):** `python scripts/generate_production_corpus.py --count 500 --force` then bump `SAMPLE_CORPUS_VERSION` (with `SEED_SAMPLE_DOCS=true`).  
+- **Hand-authored expansion:** `scripts/materialize_institutional_corpus.py`.  
+- **arXiv bulk:** `scripts/bulk_ingest_arxiv.py` + `data/arxiv_seed_list.txt` (indexes **papers**).
 
 ---
 

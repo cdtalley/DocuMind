@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 from collections import defaultdict
+from dataclasses import dataclass
 
 import pytest
 from fastapi.testclient import TestClient
 from langchain_core.documents import Document
 
-from app.main import app, get_document_service, get_embedding_service, get_ollama_client, get_rag_service
+from app.main import app, get_document_service, get_embedding_registry, get_ollama_client
+from app.models.library import LibraryId
 from app.models.response_models import AnswerResponse
 from app.services.document_service import DocumentService
 from app.utils.chunker import DocumentChunker
@@ -88,6 +90,7 @@ class FakeRagService:
                 chunks_searched=0,
                 flare_enabled=use_flare,
                 flare_followup_retrieval=False,
+                library="public",
             )
         first = results[0]
         return AnswerResponse(
@@ -101,7 +104,30 @@ class FakeRagService:
             chunks_searched=len(results),
             flare_enabled=use_flare,
             flare_followup_retrieval=False,
+            library="public",
         )
+
+
+@dataclass
+class FakeEmbeddingRegistry:
+    """Single fake store behind both library keys (matches local dual-collection wiring)."""
+
+    emb: FakeEmbeddingService
+    rag_svc: FakeRagService
+
+    @property
+    def papers(self) -> FakeEmbeddingService:
+        return self.emb
+
+    @property
+    def public(self) -> FakeEmbeddingService:
+        return self.emb
+
+    def embedding(self, library: LibraryId) -> FakeEmbeddingService:
+        return self.emb
+
+    def rag(self, library: LibraryId) -> FakeRagService:
+        return self.rag_svc
 
 
 @pytest.fixture
@@ -111,9 +137,9 @@ def client() -> TestClient:
     rag = FakeRagService(embedding)
     ollama = type("FakeOllama", (), {"health_check": lambda self: {"available": True, "models": ["llama3"]}})()
 
-    app.dependency_overrides[get_embedding_service] = lambda: embedding
+    reg = FakeEmbeddingRegistry(emb=embedding, rag_svc=rag)
+    app.dependency_overrides[get_embedding_registry] = lambda: reg
     app.dependency_overrides[get_document_service] = lambda: document
-    app.dependency_overrides[get_rag_service] = lambda: rag
     app.dependency_overrides[get_ollama_client] = lambda: ollama
     test_client = TestClient(app)
     yield test_client

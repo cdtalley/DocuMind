@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 from collections import defaultdict
+from datetime import UTC, datetime
 from typing import Any
 
 # Default Chroma anonymized telemetry off unless explicitly enabled in the environment.
@@ -20,6 +21,15 @@ class ChromaEmbeddingService:
             name=collection_name, metadata={"hnsw:space": "cosine"}
         )
         self.ollama_client = ollama_client
+        self._collection_name = collection_name
+
+    def _stamp_metadata(self, md: dict[str, Any]) -> dict[str, Any]:
+        """Provenance for re-embedding jobs, drift analysis, and multi-collection ops."""
+        out = dict(md)
+        out["embedding_model"] = self.ollama_client.embedding_model
+        out["chroma_collection"] = self._collection_name
+        out["indexed_at"] = datetime.now(UTC).replace(microsecond=0).isoformat()
+        return out
 
     def add_documents(self, documents: list[Document], doc_id: str) -> int:
         if not documents:
@@ -27,9 +37,25 @@ class ChromaEmbeddingService:
         ids = [f"{doc_id}_{i}" for i in range(len(documents))]
         embeddings = [self.ollama_client.embed(doc.page_content) for doc in documents]
         documents_texts = [doc.page_content for doc in documents]
-        metadatas = [doc.metadata for doc in documents]
+        metadatas = [self._stamp_metadata(dict(doc.metadata or {})) for doc in documents]
         self.collection.add(ids=ids, embeddings=embeddings, documents=documents_texts, metadatas=metadatas)
         return len(documents)
+
+    def add_indexed_batch(
+        self,
+        ids: list[str],
+        embeddings: list[list[float]],
+        documents: list[str],
+        metadatas: list[dict[str, Any]],
+    ) -> int:
+        """Upsert many precomputed vectors in one Chroma call (bulk indexer path)."""
+        if not ids:
+            return 0
+        if not (len(ids) == len(embeddings) == len(documents) == len(metadatas)):
+            raise ValueError("ids, embeddings, documents, metadatas must have equal length")
+        stamped = [self._stamp_metadata(dict(m)) for m in metadatas]
+        self.collection.add(ids=ids, embeddings=embeddings, documents=documents, metadatas=stamped)
+        return len(ids)
 
     def search(self, query: str, top_k: int, section_filter: str | None = None) -> list[dict]:
         query_embedding = self.ollama_client.embed(query)

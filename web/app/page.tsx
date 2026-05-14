@@ -85,6 +85,9 @@ If an area has no supporting chunk, state that clearly.`,
 
 const DEFAULT_SCENARIO = SHOWCASE_SCENARIOS[0];
 
+const INITIAL_PUBLIC_QUERY =
+  "What do the retrieved passages state? Summarize using only that evidence and cite **Article title** from the context.";
+
 type Source = {
   doc_id: string;
   paper_title: string;
@@ -124,14 +127,15 @@ type QueryResponse = {
   model_used?: string;
   flare_enabled?: boolean;
   flare_followup_retrieval?: boolean;
+  library?: string;
 };
 
 const PRESET_LIBRARY: PaperCard[] = [
   {
     doc_id: "__catalog__",
-    filename: "Bundled corpus",
-    title: "Bundled corpus (~460 docs, auto-seeded when Ollama is up; v7)",
-    authors: "Starter KB",
+    filename: "Public index",
+    title: "Public library (Wikipedia-scale) — index with scripts/bulk_index_public.py or ingest here",
+    authors: "Primary corpus",
     year: "",
     arxiv_id: "",
     chunk_count: 0
@@ -203,11 +207,12 @@ export default function HomePage() {
   const [health, setHealth] = useState<HealthPayload | null>(null);
   const [papers, setPapers] = useState<PaperCard[]>([]);
   const [loading, setLoading] = useState(false);
-  const [query, setQuery] = useState(DEFAULT_SCENARIO.query);
+  const [query, setQuery] = useState(INITIAL_PUBLIC_QUERY);
   const [mode, setMode] = useState(DEFAULT_SCENARIO.mode);
   const [section, setSection] = useState(DEFAULT_SCENARIO.section);
   const [topK, setTopK] = useState(DEFAULT_SCENARIO.topK);
   const [useFlare, setUseFlare] = useState(false);
+  const [corpusLibrary, setCorpusLibrary] = useState<"public" | "papers">("public");
   const [flareFollowUp, setFlareFollowUp] = useState(false);
   const [answer, setAnswer] = useState("");
   const [sources, setSources] = useState<Source[]>([]);
@@ -249,7 +254,7 @@ export default function HomePage() {
     try {
       const [healthPayload, papersPayload] = await Promise.all([
         fetchJson<HealthPayload>("/health"),
-        fetchJson<PaperCard[]>("/api/v1/papers")
+        fetchJson<PaperCard[]>(`/api/v1/papers?library=${encodeURIComponent(corpusLibrary)}`)
       ]);
       setHealth(healthPayload);
       setPapers(papersPayload);
@@ -269,7 +274,7 @@ export default function HomePage() {
 
   useEffect(() => {
     void refresh();
-  }, []);
+  }, [corpusLibrary]);
 
   const runQuery = useCallback(async () => {
     setLoading(true);
@@ -281,6 +286,7 @@ export default function HomePage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           query,
+          library: corpusLibrary,
           top_k: topK,
           query_mode: mode,
           section_filter: section === "All Sections" ? null : section,
@@ -300,7 +306,7 @@ export default function HomePage() {
     } finally {
       setLoading(false);
     }
-  }, [query, topK, mode, section, useFlare]);
+  }, [query, topK, mode, section, useFlare, corpusLibrary]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -323,8 +329,9 @@ export default function HomePage() {
     setMode(s.mode);
     setSection(s.section);
     setTopK(s.topK);
+    setCorpusLibrary("papers");
     if (typeof s.useFlare === "boolean") setUseFlare(s.useFlare);
-    setNotice(`Loaded scenario: ${s.label}`);
+    setNotice(`Loaded scenario: ${s.label} (papers library)`);
     setNoticeTone("success");
   };
 
@@ -340,6 +347,7 @@ export default function HomePage() {
       for (const file of Array.from(files)) {
         const form = new FormData();
         form.append("file", file);
+        form.append("library", corpusLibrary);
         await fetchJson(`/api/v1/ingest`, { method: "POST", body: form });
       }
       setNotice("Upload complete — library refreshed.");
@@ -388,7 +396,7 @@ export default function HomePage() {
 
   const deletePaper = async (docId: string) => {
     try {
-      await fetchJson(`/api/v1/papers/${docId}`, { method: "DELETE" });
+      await fetchJson(`/api/v1/papers/${docId}?library=${encodeURIComponent(corpusLibrary)}`, { method: "DELETE" });
       setNotice("Paper removed.");
       setNoticeTone("success");
       await refresh();
@@ -427,7 +435,7 @@ export default function HomePage() {
           <div>
             <div className="enterprise-topbar__title">DocuMind</div>
             <div className="enterprise-topbar__subtitle">
-              Multi-document RAG · Chroma · Ollama · FastAPI · OpenAPI v1
+              Dual-library RAG (public + papers) · Chroma · Ollama · FastAPI
             </div>
           </div>
         </div>
@@ -578,9 +586,21 @@ export default function HomePage() {
                 rows={5}
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
-                placeholder={DEFAULT_SCENARIO.query.slice(0, 120) + "…"}
+                placeholder={INITIAL_PUBLIC_QUERY.slice(0, 120) + "…"}
                 className="query-textarea"
               />
+            </div>
+            <div>
+              <label htmlFor="corpus-library">Library</label>
+              <select
+                id="corpus-library"
+                name="library"
+                value={corpusLibrary}
+                onChange={(e) => setCorpusLibrary(e.target.value as "public" | "papers")}
+              >
+                <option value="public">Public (Wikipedia-scale index)</option>
+                <option value="papers">Papers (PDFs / arXiv / legacy bundle)</option>
+              </select>
             </div>
             <div>
               <label htmlFor="query-mode">Mode</label>

@@ -2,6 +2,8 @@ from typing import Literal, Optional
 
 from pydantic import BaseModel, Field, field_validator
 
+from app.models.library import LibraryId
+
 SectionFilter = Literal[
     "abstract",
     "introduction",
@@ -14,6 +16,10 @@ SectionFilter = Literal[
 
 class QueryRequest(BaseModel):
     query: str = Field(min_length=1, max_length=2000)
+    library: LibraryId = Field(
+        default="public",
+        description="Target index: public (Wikipedia-scale) or papers (PDFs / arXiv / legacy bundle).",
+    )
     top_k: int = Field(default=6, ge=1, le=24)
     query_mode: Literal["general", "compare", "methodology", "datasets", "reproduce"] = "general"
     section_filter: Optional[SectionFilter] = Field(

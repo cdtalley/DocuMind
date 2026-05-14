@@ -17,6 +17,7 @@ Rules: No invented paper titles or datasets. If a name appears in a Keywords: li
 def test_gold_demo_query_validates_with_compare_24_and_flare() -> None:
     req = QueryRequest(
         query=GOLD_DEMO_QUERY,
+        library="papers",
         top_k=24,
         query_mode="compare",
         use_flare=True,

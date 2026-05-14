@@ -2,12 +2,14 @@ from __future__ import annotations
 
 import logging
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 
-from app.main import get_embedding_service, get_ollama_client, get_rag_service
+from app.config import get_settings
+from app.main import get_embedding_registry, get_ollama_client
+from app.models.library import LibraryId
 from app.models.request_models import QueryRequest
-from app.models.response_models import AnswerResponse, CollectionStats
-from app.services.embedding_service import ChromaEmbeddingService
+from app.models.response_models import AnswerResponse, CollectionStats, LibrariesResponse
+from app.services.embedding_registry import EmbeddingRegistry
 from app.services.rag_service import RAGService
 from app.utils.ollama_client import OllamaClient
 from app.utils.ollama_client import OllamaConnectionError
@@ -16,10 +18,17 @@ router = APIRouter()
 logger = logging.getLogger("documind.query")
 
 
+def get_rag_for_query(
+    request: QueryRequest,
+    registry: EmbeddingRegistry = Depends(get_embedding_registry),
+) -> RAGService:
+    return registry.rag(request.library)
+
+
 @router.post("/query", response_model=AnswerResponse)
 async def query_papers(
     request: QueryRequest,
-    rag_service: RAGService = Depends(get_rag_service),
+    rag_service: RAGService = Depends(get_rag_for_query),
     ollama_client: OllamaClient = Depends(get_ollama_client),
 ) -> AnswerResponse:
     if not ollama_client.health_check().get("available", False):
@@ -47,8 +56,22 @@ async def query_papers(
         ) from exc
 
 
+@router.get("/libraries", response_model=LibrariesResponse)
+async def list_libraries(
+    registry: EmbeddingRegistry = Depends(get_embedding_registry),
+) -> LibrariesResponse:
+    """Both Chroma collections in one call — use for capacity planning and split-brain checks."""
+    settings = get_settings()
+    return LibrariesResponse(
+        public=CollectionStats(**registry.public.collection_stats()),
+        papers=CollectionStats(**registry.papers.collection_stats()),
+        default_library=settings.DEFAULT_LIBRARY,
+    )
+
+
 @router.get("/collection/stats", response_model=CollectionStats)
 async def collection_stats(
-    embedding_service: ChromaEmbeddingService = Depends(get_embedding_service),
+    library: LibraryId = Query("public", description="Target index: public | papers"),
+    registry: EmbeddingRegistry = Depends(get_embedding_registry),
 ) -> CollectionStats:
-    return CollectionStats(**embedding_service.collection_stats())
+    return CollectionStats(**registry.embedding(library).collection_stats())

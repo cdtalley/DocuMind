@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 import re
 
+from app.models.library import LibraryId
 from app.models.response_models import AnswerResponse, SourceCitation
 from app.services.embedding_service import ChromaEmbeddingService
 from app.utils.ollama_client import OllamaClient
@@ -142,6 +143,55 @@ SYSTEM_PROMPTS = {
     ),
 }
 
+_PUBLIC_GROUNDING = (
+    "You are DocuMind — a careful encyclopedia-grounded assistant. Non-negotiable grounding:\n"
+    "- Use ONLY the context blocks. Never invent facts, dates, people, places, or sources not supported by the excerpts.\n"
+    "- Every substantive claim should name the **Article title** (exact string from context metadata) in the same "
+    "bullet/paragraph or the adjacent one.\n"
+    "- Prefer neutral, factual tone. If excerpts conflict, say so briefly.\n"
+    "- If evidence is thin, say so — never pad. Short verbatim quotes (≤25 words) only when they appear exactly in the excerpt.\n"
+)
+
+PUBLIC_SYSTEM_PROMPTS = {
+    "general": _PUBLIC_GROUNDING
+    + (
+        "## Summary\n"
+        "Direct answer to the question in 1–3 short paragraphs, citing **Article title** where relevant.\n"
+        "## What the excerpts support\n"
+        "Bullets tied to **Article title**.\n"
+        "## Limits\n"
+        "What cannot be concluded from these excerpts alone.\n"
+    ),
+    "compare": _PUBLIC_GROUNDING
+    + (
+        "## Comparison\n"
+        "Contrast themes across articles using a markdown table when helpful: Topic | **Article title** | Supported claim | Caveat.\n"
+        "## Narrative\n"
+        "One or two paragraphs weaving only what the excerpts state.\n"
+    ),
+    "methodology": _PUBLIC_GROUNDING
+    + (
+        "## Extracted detail\n"
+        "Implementation or process notes exactly as described, with **Article title** on each cluster of bullets.\n"
+        "## Missing steps\n"
+        "Use *Not stated in excerpt.* where the text is silent.\n"
+    ),
+    "datasets": _PUBLIC_GROUNDING
+    + (
+        "List dataset or benchmark names using ONLY the context. "
+        "Start with ## Dataset inventory then ### At a glance. "
+        "Then ### Entries as bullets: `**Dataset** — **Article title** — usage from passage.` "
+        "If none, say so."
+    ),
+    "reproduce": _PUBLIC_GROUNDING
+    + (
+        "## What can be reproduced from excerpts\n"
+        "Bullets with **Article title**; use checklists only for steps explicitly described.\n"
+        "## Blockers\n"
+        "What is missing from excerpts for a full reproduction.\n"
+    ),
+}
+
 # Forward-looking active retrieval (FLARE, Jiang et al. EMNLP 2023). Full FLARE uses token-level
 # confidence; local Ollama chat does not expose logprobs, so we use explicit uncertainty markers
 # (???) and phrase hedges in a short draft to decide on a second retrieval pass.
@@ -174,11 +224,20 @@ def flare_triggers_follow_up(draft: str) -> bool:
 
 class RAGService:
     def __init__(
-        self, embedding_service: ChromaEmbeddingService, ollama_client: OllamaClient, settings
+        self,
+        embedding_service: ChromaEmbeddingService,
+        ollama_client: OllamaClient,
+        settings,
+        *,
+        content_library: LibraryId = "papers",
     ) -> None:
         self.embedding_service = embedding_service
         self.ollama_client = ollama_client
         self.settings = settings
+        self._content_library: LibraryId = content_library
+
+    def _system_prompts(self) -> dict[str, str]:
+        return PUBLIC_SYSTEM_PROMPTS if self._content_library == "public" else SYSTEM_PROMPTS
 
     @staticmethod
     def _chunk_identity(item: dict) -> tuple:
@@ -410,11 +469,18 @@ class RAGService:
                     chunks_searched = len(rer1) + len(rer2)
 
         if not filtered:
-            return AnswerResponse(
-                answer=(
+            if self._content_library == "public":
+                empty = (
+                    "I could not find relevant information in the indexed public corpus for this question. "
+                    "Bulk-index Wikipedia text (see scripts/bulk_index_public.py) or ingest .txt files with library=public."
+                )
+            else:
+                empty = (
                     "I could not find relevant information in your paper library for this question. "
                     "Try uploading more papers or rephrasing your query."
-                ),
+                )
+            return AnswerResponse(
+                answer=empty,
                 sources=[],
                 confidence=0.0,
                 has_answer=False,
@@ -424,6 +490,7 @@ class RAGService:
                 chunks_searched=chunks_searched,
                 flare_enabled=flare_on,
                 flare_followup_retrieval=flare_follow_up,
+                library=self._content_library,
             )
 
         if query_mode == "datasets":
@@ -431,15 +498,17 @@ class RAGService:
             if extracted:
                 unique_datasets = {row[0] for row in extracted}
                 unique_papers = {row[1] for row in extracted}
+                scope = "articles" if self._content_library == "public" else "papers"
+                row_unit = "article" if self._content_library == "public" else "paper"
                 answer_lines = [
                     "## Dataset inventory",
-                    f"*Library-scoped scan — **{len(unique_datasets)}** dataset labels across **{len(unique_papers)}** papers "
+                    f"*Library-scoped scan — **{len(unique_datasets)}** dataset labels across **{len(unique_papers)}** {scope} "
                     f"({len(extracted)} mentions in retrieved chunks).*",
                     "",
                     "### At a glance",
                     f"- **{len(unique_datasets)}** distinct dataset or benchmark names detected",
-                    f"- **{len(unique_papers)}** contributing papers in this answer",
-                    f"- **{len(extracted)}** total dataset–paper mention rows (sorted below)",
+                    f"- **{len(unique_papers)}** contributing {scope} in this answer",
+                    f"- **{len(extracted)}** total dataset–{row_unit} mention rows (sorted below)",
                     "",
                     "### Entries",
                 ]
@@ -450,26 +519,29 @@ class RAGService:
                 answer_text = (
                     "## Dataset inventory\n\n"
                     "No named datasets or benchmarks were detected in the retrieved passages. "
-                    "Try a broader **Top K**, another mode, or ingest papers whose *experiments* sections mention benchmarks."
+                    "Try a broader **Top K**, another mode, or add content whose passages mention benchmarks."
                 )
         else:
             context_parts = []
+            src_label = "Article" if self._content_library == "public" else "Paper"
+            corpus = "encyclopedia articles" if self._content_library == "public" else "research papers"
             for i, item in enumerate(filtered):
                 metadata = item["metadata"]
                 context_parts.append(
-                    f"[Source {i + 1}] Paper: {metadata.get('title', 'Unknown')} | "
+                    f"[Source {i + 1}] {src_label}: {metadata.get('title', 'Unknown')} | "
                     f"Section: {metadata.get('section', 'body')} | "
                     f"Page: {metadata.get('page_number', 0)}\n{item['content']}\n\n"
                 )
             context = "".join(context_parts)
 
-            system_prompt = SYSTEM_PROMPTS.get(query_mode, SYSTEM_PROMPTS["general"])
+            system_prompt = self._system_prompts().get(query_mode, self._system_prompts()["general"])
+            cite = "**Article title**" if self._content_library == "public" else "**Paper title**"
             user_message = (
-                f"Context from research papers:\n\n{context}\n"
+                f"Context from {corpus}:\n\n{context}\n"
                 f"Question:\n{query}\n\n"
                 "Produce the full structured answer. Be thorough where the passages allow: multi-paragraph ### sections, "
                 "nested bullets, and a rich comparison table when in compare mode. "
-                "Bold **Paper title** throughout. If a section has little evidence, keep it short and label the gap."
+                f"Bold {cite} throughout. If a section has little evidence, keep it short and label the gap."
             )
             messages = [{"role": "system", "content": system_prompt}, {"role": "user", "content": user_message}]
             temp = 0.1
@@ -508,4 +580,5 @@ class RAGService:
             chunks_searched=chunks_searched,
             flare_enabled=flare_on,
             flare_followup_retrieval=flare_follow_up,
+            library=self._content_library,
         )

@@ -9,7 +9,14 @@ class Settings(BaseSettings):
     LLM_MODEL: str = "llama3"
     EMBEDDING_MODEL: str = "nomic-embed-text"
     CHROMA_PERSIST_DIR: str = "./chroma_db"
+    # Legacy / research PDFs + optional bundled sample_docs (when SEED_SAMPLE_DOCS=true).
     CHROMA_COLLECTION_NAME: str = "documind_papers"
+    # Primary portfolio corpus: Wikipedia or other public text bulk-indexed here.
+    CHROMA_COLLECTION_PUBLIC: str = "documind_wikipedia"
+    # Default API library: public (empty until bulk_index_public / ingest); papers for DS-only demos.
+    DEFAULT_LIBRARY: Literal["public", "papers"] = "public"
+    # When true, startup indexes data/sample_docs/* into the papers collection (synthetic DS briefs).
+    SEED_SAMPLE_DOCS: bool = False
     CHUNK_SIZE: int = 800
     CHUNK_OVERLAP: int = 100
     TOP_K_RESULTS: int = 6

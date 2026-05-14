@@ -75,6 +75,16 @@ def test_arxiv_invalid_id(client) -> None:
     assert response.status_code == 400
 
 
+def test_libraries_snapshot(client) -> None:
+    r = client.get("/api/v1/libraries")
+    assert r.status_code == 200
+    body = r.json()
+    assert "public" in body and "papers" in body
+    assert body["public"]["collection_name"]
+    assert body["papers"]["collection_name"]
+    assert body["default_library"] in ("public", "papers")
+
+
 def test_collection_stats(client) -> None:
     response = client.get("/api/v1/collection/stats")
     assert response.status_code == 200

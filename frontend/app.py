@@ -5,7 +5,7 @@ API_BASE_URL = "http://127.0.0.1:8001"
 
 st.set_page_config(page_title="DocuMind", page_icon="🔬", layout="wide")
 st.title("🔬 DocuMind")
-st.caption("Data Science Research Paper Intelligence")
+st.caption("Dual-library RAG: public (Wikipedia-scale) + papers (PDFs / arXiv). Set SEED_SAMPLE_DOCS for bundled samples.")
 
 if "chat_history" not in st.session_state:
     st.session_state.chat_history = []
@@ -21,6 +21,12 @@ def api_post(path: str, payload: dict):
 
 with st.sidebar:
     st.header("DocuMind")
+    library = st.selectbox(
+        "Library",
+        options=["public", "papers"],
+        index=0,
+        format_func=lambda x: "Public (Wikipedia index)" if x == "public" else "Papers (PDFs / arXiv)",
+    )
     try:
         health = api_get("/health").json()
         st.success("Ollama online" if health.get("ollama_available") else "Ollama offline")
@@ -61,6 +67,7 @@ with tabs[0]:
     if st.button("Ask DocuMind", use_container_width=True) and query.strip():
         payload = {
             "query": query.strip(),
+            "library": library,
             "top_k": top_k,
             "query_mode": mode_mapping[mode_label],
             "section_filter": None if section == "All Sections" else section,
@@ -99,7 +106,12 @@ with tabs[1]:
     if files and st.button("Upload Selected Files", use_container_width=True):
         for item in files:
             files_payload = {"file": (item.name, item.getvalue(), item.type or "application/octet-stream")}
-            response = requests.post(f"{API_BASE_URL}/api/v1/ingest", files=files_payload, timeout=180)
+            response = requests.post(
+                f"{API_BASE_URL}/api/v1/ingest",
+                files=files_payload,
+                data={"library": library},
+                timeout=180,
+            )
             if response.status_code == 200:
                 payload = response.json()
                 st.success(f"Uploaded {payload['filename']}")
@@ -125,7 +137,7 @@ with tabs[2]:
             st.error(response.text)
 
 with tabs[3]:
-    response = api_get("/api/v1/papers")
+    response = api_get(f"/api/v1/papers?library={library}")
     if response.status_code != 200:
         st.error(response.text)
     else:
@@ -149,5 +161,8 @@ with tabs[3]:
                     st.caption(f"Chunks: {paper['chunk_count']}")
                 with cols[1]:
                     if st.button("🗑️ Delete", key=paper["doc_id"]):
-                        requests.delete(f"{API_BASE_URL}/api/v1/papers/{paper['doc_id']}", timeout=60)
+                        requests.delete(
+                            f"{API_BASE_URL}/api/v1/papers/{paper['doc_id']}?library={library}",
+                            timeout=60,
+                        )
                         st.rerun()

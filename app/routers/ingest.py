@@ -3,12 +3,13 @@ from __future__ import annotations
 import time
 from uuid import uuid4
 
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, status
 
-from app.main import get_document_service, get_embedding_service, get_ollama_client
+from app.main import get_document_service, get_embedding_registry, get_ollama_client
+from app.models.library import LibraryId
+from app.services.embedding_registry import EmbeddingRegistry
 from app.models.request_models import IngestResponse
 from app.services.document_service import DocumentService
-from app.services.embedding_service import ChromaEmbeddingService
 from app.utils.ollama_client import OllamaClient
 from app.utils.ollama_client import OllamaConnectionError
 
@@ -20,10 +21,12 @@ ALLOWED_EXTENSIONS = {".pdf", ".docx", ".txt"}
 @router.post("/ingest", response_model=IngestResponse)
 async def ingest_file(
     file: UploadFile = File(...),
+    library: LibraryId = Form("public", description="Target index: public | papers"),
     document_service: DocumentService = Depends(get_document_service),
-    embedding_service: ChromaEmbeddingService = Depends(get_embedding_service),
+    registry: EmbeddingRegistry = Depends(get_embedding_registry),
     ollama_client: OllamaClient = Depends(get_ollama_client),
 ) -> IngestResponse:
+    embedding_service = registry.embedding(library)
     filename = file.filename or "uploaded_file"
     extension = f".{filename.split('.')[-1].lower()}" if "." in filename else ""
     if extension not in ALLOWED_EXTENSIONS:
@@ -66,8 +69,11 @@ async def ingest_file(
 
 @router.delete("/ingest/{doc_id}")
 async def delete_ingested_document(
-    doc_id: str, embedding_service: ChromaEmbeddingService = Depends(get_embedding_service)
+    doc_id: str,
+    library: LibraryId = Query("public"),
+    registry: EmbeddingRegistry = Depends(get_embedding_registry),
 ) -> dict:
+    embedding_service = registry.embedding(library)
     if not embedding_service.delete_document(doc_id):
         raise HTTPException(status_code=404, detail=f"No indexed document: {doc_id}")
     return {"deleted": True, "doc_id": doc_id}

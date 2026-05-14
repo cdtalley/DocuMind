@@ -6,7 +6,7 @@ import time
 import httpx
 from fastapi import APIRouter, Depends, HTTPException
 
-from app.main import get_document_service, get_embedding_service, get_ollama_client
+from app.main import get_document_service, get_papers_embedding_service, get_ollama_client
 from app.models.request_models import ArxivFetchRequest, IngestResponse
 from app.services.document_service import DocumentService
 from app.services.embedding_service import ChromaEmbeddingService
@@ -20,7 +20,7 @@ router = APIRouter()
 async def fetch_arxiv(
     request: ArxivFetchRequest,
     document_service: DocumentService = Depends(get_document_service),
-    embedding_service: ChromaEmbeddingService = Depends(get_embedding_service),
+    embedding_service: ChromaEmbeddingService = Depends(get_papers_embedding_service),
     ollama_client: OllamaClient = Depends(get_ollama_client),
 ) -> IngestResponse:
     from app.main import settings
