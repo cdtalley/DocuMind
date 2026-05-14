@@ -45,6 +45,12 @@ def main() -> int:
         help="Resume file for bulk_index_public",
     )
     ap.add_argument("--workers", type=int, default=4, help="Parallel embed workers per file (bulk_index_public)")
+    ap.add_argument(
+        "--progress-every",
+        type=int,
+        default=25,
+        help="Pass-through to bulk_index_public --progress-every",
+    )
     ap.add_argument("--skip-stream", action="store_true", help="Only run bulk indexer (out-dir must exist)")
     ap.add_argument("--skip-index", action="store_true", help="Only stream to disk (no Ollama/Chroma)")
     ap.add_argument("--dry-run-index", action="store_true", help="Pass through to bulk_index_public --dry-run")
@@ -86,6 +92,8 @@ def main() -> int:
         str(ns.checkpoint_bulk),
         "--workers",
         str(ns.workers),
+        "--progress-every",
+        str(ns.progress_every),
     ]
     if ns.dry_run_index:
         bulk_args.append("--dry-run")

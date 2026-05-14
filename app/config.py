@@ -8,6 +8,8 @@ class Settings(BaseSettings):
     OLLAMA_BASE_URL: str = "http://localhost:11434"
     LLM_MODEL: str = "llama3"
     EMBEDDING_MODEL: str = "nomic-embed-text"
+    # HTTP timeouts for Ollama (embed can spike on long chunks during bulk jobs).
+    OLLAMA_REQUEST_TIMEOUT_SEC: int = 120
     CHROMA_PERSIST_DIR: str = "./chroma_db"
     # Legacy / research PDFs + optional bundled sample_docs (when SEED_SAMPLE_DOCS=true).
     CHROMA_COLLECTION_NAME: str = "documind_papers"

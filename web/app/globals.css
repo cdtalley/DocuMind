@@ -82,6 +82,16 @@ body {
   border: 0;
 }
 
+.enterprise-topbar__default-lib {
+  font-weight: 500;
+  color: var(--text-muted);
+}
+
+.enterprise-topbar__default-lib strong {
+  color: #e0f2fe;
+  font-weight: 700;
+}
+
 .enterprise-topbar {
   display: flex;
   flex-wrap: wrap;
@@ -273,6 +283,26 @@ body {
 .status-chip--ok .status-dot {
   background: #22c55e;
   box-shadow: 0 0 8px rgba(34, 197, 94, 0.6);
+  animation: status-breathe 2.4s ease-in-out infinite;
+}
+
+@keyframes status-breathe {
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+    box-shadow: 0 0 8px rgba(34, 197, 94, 0.55);
+  }
+  50% {
+    opacity: 0.88;
+    transform: scale(1.08);
+    box-shadow: 0 0 14px rgba(34, 197, 94, 0.35);
+  }
+}
+
+.status-chip--stat {
+  font-size: 0.68rem;
+  letter-spacing: 0.02em;
 }
 
 .status-chip--warn .status-dot {
@@ -664,6 +694,34 @@ button.btn-ghost:hover:not(:disabled) {
   box-shadow: var(--shadow-card), 0 0 0 1px rgba(255, 255, 255, 0.03) inset;
 }
 
+.card--hero::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 2px;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(56, 189, 248, 0.5),
+    rgba(167, 139, 250, 0.45),
+    rgba(56, 189, 248, 0.5),
+    transparent
+  );
+  background-size: 200% 100%;
+  animation: hero-shimmer 8s linear infinite;
+  opacity: 0.85;
+  pointer-events: none;
+}
+
+@keyframes hero-shimmer {
+  0% {
+    background-position: 0% 50%;
+  }
+  100% {
+    background-position: 200% 50%;
+  }
+}
+
 .card--hero::after {
   content: "";
   position: absolute;
@@ -718,6 +776,50 @@ button.btn-ghost:hover:not(:disabled) {
   letter-spacing: 0.1em;
   color: var(--text-muted);
   margin-top: 6px;
+}
+
+.hero-metrics-foot {
+  grid-column: 1 / -1;
+  margin: 4px 0 0;
+  text-align: center;
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  letter-spacing: 0.04em;
+}
+
+.hero-metrics-foot strong {
+  color: #bae6fd;
+  font-weight: 700;
+}
+
+.sidebar-indices .sidebar-index-row {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border-subtle);
+}
+
+.sidebar-indices .sidebar-index-row:first-of-type {
+  margin-top: 6px;
+  padding-top: 0;
+  border-top: none;
+}
+
+.sidebar-index-name {
+  font-size: 0.62rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #7dd3fc;
+  word-break: break-all;
+}
+
+.sidebar-index-stats {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
 }
 
 .card-hero-head {

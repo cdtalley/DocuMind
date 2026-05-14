@@ -114,6 +114,7 @@ async def lifespan(_: FastAPI):
         base_url=settings.OLLAMA_BASE_URL,
         llm_model=settings.LLM_MODEL,
         embedding_model=settings.EMBEDDING_MODEL,
+        request_timeout_sec=float(settings.OLLAMA_REQUEST_TIMEOUT_SEC),
     )
 
     def _init_chroma_pair() -> tuple[ChromaEmbeddingService, ChromaEmbeddingService]:

@@ -26,7 +26,8 @@ This document specifies **architecture**, **control flows**, **configuration**, 
 16. [Known limitations and extension points](#16-known-limitations-and-extension-points)  
 17. [Portfolio artifacts](#17-portfolio-artifacts)  
 18. [References](#18-references)  
-19. [Interview narrative: quality bar, challenges, and retrieval design](#19-interview-narrative-quality-bar-challenges-and-retrieval-design)
+19. [Interview narrative: quality bar, challenges, and retrieval design](#19-interview-narrative-quality-bar-challenges-and-retrieval-design)  
+20. [Scale operations playbook (hiring + ops)](docs/SCALE_OPERATIONS_PLAYBOOK.md)
 
 ---
 
@@ -301,7 +302,8 @@ Applied in `app/main.py` (order matters for FastAPI / Starlette):
    `python scripts/build_public_corpus.py --articles 10000`  
    Use `--articles 50000` or higher for serious scale; `--articles 0 --allow-unbounded` streams the full dump (disk-hungry).  
 3. **Piecemeal:** `scripts/stream_wikipedia_to_txt.py` → `scripts/bulk_index_public.py` (`--dry-run` for chunk estimates, `--checkpoint` for resume, `--workers` for parallel Ollama embeds).  
-4. **Ops:** `GET /api/v1/libraries` for both collections’ chunk and document counts.
+4. **Ops:** `GET /api/v1/libraries` for both collections’ chunk and document counts.  
+5. **Scale narrative + disk report:** [docs/SCALE_OPERATIONS_PLAYBOOK.md](docs/SCALE_OPERATIONS_PLAYBOOK.md); `python scripts/report_corpus_scale.py` (needs running API).
 
 ### Other scripts
 

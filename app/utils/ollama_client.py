@@ -9,10 +9,18 @@ class OllamaConnectionError(Exception):
 
 
 class OllamaClient:
-    def __init__(self, base_url: str, llm_model: str, embedding_model: str) -> None:
+    def __init__(
+        self,
+        base_url: str,
+        llm_model: str,
+        embedding_model: str,
+        *,
+        request_timeout_sec: float = 120.0,
+    ) -> None:
         self.base_url = base_url.rstrip("/")
         self.llm_model = llm_model
         self.embedding_model = embedding_model
+        self._timeout = float(request_timeout_sec)
 
     def chat(self, messages: list[dict[str, Any]], temperature: float = 0.1) -> str:
         url = f"{self.base_url}/api/chat"
@@ -25,7 +33,7 @@ class OllamaClient:
         last_err: BaseException | None = None
         for attempt in range(3):
             try:
-                response = requests.post(url, json=payload, timeout=120)
+                response = requests.post(url, json=payload, timeout=self._timeout)
                 response.raise_for_status()
                 data = response.json()
                 msg = data.get("message") or {}
@@ -48,7 +56,7 @@ class OllamaClient:
         payload = {"model": self.embedding_model, "prompt": text}
         for attempt in range(3):
             try:
-                response = requests.post(url, json=payload, timeout=120)
+                response = requests.post(url, json=payload, timeout=self._timeout)
                 response.raise_for_status()
                 return response.json()["embedding"]
             except Exception as exc:
@@ -68,7 +76,7 @@ class OllamaClient:
     def health_check(self) -> dict[str, Any]:
         url = f"{self.base_url}/api/tags"
         try:
-            response = requests.get(url, timeout=20)
+            response = requests.get(url, timeout=min(30.0, self._timeout))
             response.raise_for_status()
             data = response.json()
             models = [item.get("name", "") for item in data.get("models", []) if item.get("name")]

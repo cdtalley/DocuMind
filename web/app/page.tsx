@@ -117,6 +117,18 @@ type HealthPayload = {
   collection_stats: { paper_count: number; total_chunks: number; collection_name: string };
 };
 
+type CollectionStatsPayload = {
+  paper_count: number;
+  total_chunks: number;
+  collection_name: string;
+};
+
+type LibrariesPayload = {
+  public: CollectionStatsPayload;
+  papers: CollectionStatsPayload;
+  default_library: string;
+};
+
 type QueryResponse = {
   answer: string;
   sources: Source[];
@@ -225,6 +237,7 @@ export default function HomePage() {
   const [apiHealthy, setApiHealthy] = useState(true);
   const [lastSync, setLastSync] = useState<Date | null>(null);
   const [modelUsed, setModelUsed] = useState<string | null>(null);
+  const [libraries, setLibraries] = useState<LibrariesPayload | null>(null);
 
   const libraryStats = useMemo(
     () => ({
@@ -252,12 +265,14 @@ export default function HomePage() {
 
   const refresh = async () => {
     try {
-      const [healthPayload, papersPayload] = await Promise.all([
+      const [healthPayload, papersPayload, librariesPayload] = await Promise.all([
         fetchJson<HealthPayload>("/health"),
-        fetchJson<PaperCard[]>(`/api/v1/papers?library=${encodeURIComponent(corpusLibrary)}`)
+        fetchJson<PaperCard[]>(`/api/v1/papers?library=${encodeURIComponent(corpusLibrary)}`),
+        fetchJson<LibrariesPayload>("/api/v1/libraries")
       ]);
       setHealth(healthPayload);
       setPapers(papersPayload);
+      setLibraries(librariesPayload);
       setApiHealthy(true);
       setLastSync(new Date());
       setNotice("");
@@ -265,6 +280,7 @@ export default function HomePage() {
       setApiHealthy(false);
       setHealth(null);
       setPapers([]);
+      setLibraries(null);
       setNotice(
         `API unreachable at ${API_BASE_URL}. Run: .\\start_documind.ps1 from the project root (or uvicorn on port 8001).`
       );
@@ -423,6 +439,8 @@ export default function HomePage() {
 
   const indexedPapers = health?.collection_stats.paper_count ?? libraryStats.totalPapers;
   const indexedChunks = health?.collection_stats.total_chunks ?? libraryStats.totalChunks;
+  const totalDualChunks =
+    libraries != null ? libraries.public.total_chunks + libraries.papers.total_chunks : indexedChunks;
 
   return (
     <div className="app-root">
@@ -436,6 +454,12 @@ export default function HomePage() {
             <div className="enterprise-topbar__title">DocuMind</div>
             <div className="enterprise-topbar__subtitle">
               Dual-library RAG (public + papers) · Chroma · Ollama · FastAPI
+              {libraries ? (
+                <span className="enterprise-topbar__default-lib">
+                  {" "}
+                  · default query library: <strong>{libraries.default_library}</strong>
+                </span>
+              ) : null}
             </div>
           </div>
         </div>
@@ -446,9 +470,28 @@ export default function HomePage() {
           <span className={`status-chip ${ollamaOk ? "status-chip--ok" : apiHealthy ? "status-chip--warn" : "status-chip--bad"}`}>
             <span className="status-dot" /> Inference
           </span>
-          <span className="status-chip status-chip--neutral">
-            <span className="status-dot" /> {indexedPapers} docs · {indexedChunks.toLocaleString()} chunks
-          </span>
+          {libraries ? (
+            <>
+              <span
+                className="status-chip status-chip--neutral status-chip--stat"
+                title={libraries.public.collection_name}
+              >
+                <span className="status-dot" /> Public · {libraries.public.paper_count.toLocaleString()} docs ·{" "}
+                {libraries.public.total_chunks.toLocaleString()} chk
+              </span>
+              <span
+                className="status-chip status-chip--neutral status-chip--stat"
+                title={libraries.papers.collection_name}
+              >
+                <span className="status-dot" /> Papers · {libraries.papers.paper_count.toLocaleString()} docs ·{" "}
+                {libraries.papers.total_chunks.toLocaleString()} chk
+              </span>
+            </>
+          ) : (
+            <span className="status-chip status-chip--neutral">
+              <span className="status-dot" /> {indexedPapers} docs · {indexedChunks.toLocaleString()} chunks
+            </span>
+          )}
           <span className="enterprise-topbar__sync">Synced {syncLabel}</span>
         </div>
         <div className="enterprise-topbar__links">
@@ -472,6 +515,9 @@ export default function HomePage() {
         <span className="demo-trust-bar__item" role="listitem">
           Ingest API + optional arXiv pull
         </span>
+        <span className="demo-trust-bar__item" role="listitem">
+          Live dual-index snapshot via /api/v1/libraries
+        </span>
       </div>
 
       <main className="layout">
@@ -492,11 +538,32 @@ export default function HomePage() {
               <p className="sidebar-metric">LLM · {health?.llm_model ?? "—"}</p>
               <p className="sidebar-metric">Embed · {health?.embedding_model ?? "—"}</p>
             </div>
-            <div className="card card--inset">
-              <strong className="sidebar-card-label">Vector store</strong>
-              <p className="sidebar-metric">Papers · {indexedPapers}</p>
-              <p className="sidebar-metric">Chunks · {indexedChunks.toLocaleString()}</p>
-              <p className="sidebar-collection">{health?.collection_stats.collection_name ?? "documind_papers"}</p>
+            <div className="card card--inset sidebar-indices">
+              <strong className="sidebar-card-label">Vector indices</strong>
+              {libraries ? (
+                <>
+                  <div className="sidebar-index-row">
+                    <span className="sidebar-index-name">{libraries.public.collection_name}</span>
+                    <span className="sidebar-index-stats">
+                      {libraries.public.paper_count.toLocaleString()} docs ·{" "}
+                      {libraries.public.total_chunks.toLocaleString()} vectors
+                    </span>
+                  </div>
+                  <div className="sidebar-index-row">
+                    <span className="sidebar-index-name">{libraries.papers.collection_name}</span>
+                    <span className="sidebar-index-stats">
+                      {libraries.papers.paper_count.toLocaleString()} docs ·{" "}
+                      {libraries.papers.total_chunks.toLocaleString()} vectors
+                    </span>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <p className="sidebar-metric">Docs · {indexedPapers}</p>
+                  <p className="sidebar-metric">Chunks · {indexedChunks.toLocaleString()}</p>
+                  <p className="sidebar-collection">{health?.collection_stats.collection_name ?? "—"}</p>
+                </>
+              )}
             </div>
             <button type="button" className="btn-ghost" onClick={() => void refresh()}>
               Refresh status
@@ -520,18 +587,40 @@ export default function HomePage() {
               </span>
             </div>
             <div className="hero-metrics" aria-label="Index snapshot">
-              <div className="hero-metric">
-                <div className="hero-metric__value">{indexedPapers}</div>
-                <div className="hero-metric__label">Indexed papers</div>
-              </div>
-              <div className="hero-metric">
-                <div className="hero-metric__value">{indexedChunks.toLocaleString()}</div>
-                <div className="hero-metric__label">Vector chunks</div>
-              </div>
-              <div className="hero-metric">
-                <div className="hero-metric__value">{modes.length}</div>
-                <div className="hero-metric__label">Retrieval modes</div>
-              </div>
+              {libraries ? (
+                <>
+                  <div className="hero-metric">
+                    <div className="hero-metric__value">{libraries.public.total_chunks.toLocaleString()}</div>
+                    <div className="hero-metric__label">Public index chunks</div>
+                  </div>
+                  <div className="hero-metric">
+                    <div className="hero-metric__value">{libraries.papers.total_chunks.toLocaleString()}</div>
+                    <div className="hero-metric__label">Papers index chunks</div>
+                  </div>
+                  <div className="hero-metric">
+                    <div className="hero-metric__value">{modes.length}</div>
+                    <div className="hero-metric__label">Retrieval modes</div>
+                  </div>
+                  <p className="hero-metrics-foot">
+                    <strong>{totalDualChunks.toLocaleString()}</strong> total vectors across both Chroma collections
+                  </p>
+                </>
+              ) : (
+                <>
+                  <div className="hero-metric">
+                    <div className="hero-metric__value">{indexedPapers}</div>
+                    <div className="hero-metric__label">Indexed documents</div>
+                  </div>
+                  <div className="hero-metric">
+                    <div className="hero-metric__value">{indexedChunks.toLocaleString()}</div>
+                    <div className="hero-metric__label">Vector chunks</div>
+                  </div>
+                  <div className="hero-metric">
+                    <div className="hero-metric__value">{modes.length}</div>
+                    <div className="hero-metric__label">Retrieval modes</div>
+                  </div>
+                </>
+              )}
             </div>
           </div>
 
@@ -782,7 +871,7 @@ export default function HomePage() {
 
         <div className="card">
           <div className="library-card-header">
-            <h2 className="card-h2">Paper library</h2>
+            <h2 className="card-h2">{corpusLibrary === "public" ? "Public corpus" : "Paper library"}</h2>
             <span className="library-count">{indexedPapers} in index</span>
           </div>
           {papers.length === 0 ? (

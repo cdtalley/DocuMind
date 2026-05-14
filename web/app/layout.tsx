@@ -15,9 +15,9 @@ const outfit = Outfit({
 });
 
 export const metadata: Metadata = {
-  title: "DocuMind · Retrieval-augmented research library",
+  title: "DocuMind · Dual-library RAG control plane",
   description:
-    "FastAPI: Chroma (cosine) persistent index, Ollama embeddings and chat, mode-specific retrieval budgets, keyword-weighted rerank, optional FLARE follow-up. OpenAPI v1, live/ready health split. Next.js operator UI."
+    "Operator console: live public + papers Chroma stats, five query modes, grounded Markdown synthesis with citations, optional FLARE-style second retrieval. FastAPI + Ollama."
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

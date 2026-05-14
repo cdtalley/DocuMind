@@ -12,6 +12,7 @@ Usage (from repo root, Ollama running):
   python scripts/bulk_index_public.py --txt-dir data/wiki_txt_demo --max-files 500 --workers 6
   python scripts/bulk_index_public.py --txt-dir data/wiki_txt --checkpoint data/.bulk_public_checkpoint.json
   python scripts/bulk_index_public.py --txt-dir data/wiki_txt_demo --dry-run
+  python scripts/bulk_index_public.py ... --progress-every 100
 """
 from __future__ import annotations
 
@@ -103,6 +104,13 @@ def main() -> int:
     ap.add_argument("--checkpoint", type=Path, default=None, help="JSON file listing completed basenames for resume")
     ap.add_argument("--workers", type=int, default=4, help="Parallel Ollama embed calls per file (>=1)")
     ap.add_argument(
+        "--progress-every",
+        type=int,
+        default=25,
+        metavar="N",
+        help="Emit INFO progress every N newly indexed files (raise for huge corpora to cut log spam)",
+    )
+    ap.add_argument(
         "--dry-run",
         action="store_true",
         help="Count files and chunks only (no Ollama / Chroma writes)",
@@ -149,6 +157,7 @@ def main() -> int:
         base_url=settings.OLLAMA_BASE_URL,
         llm_model=settings.LLM_MODEL,
         embedding_model=settings.EMBEDDING_MODEL,
+        request_timeout_sec=float(settings.OLLAMA_REQUEST_TIMEOUT_SEC),
     )
     if not client.health_check().get("available"):
         logger.error("Ollama not available at %s", settings.OLLAMA_BASE_URL)
@@ -183,7 +192,7 @@ def main() -> int:
             if ns.checkpoint:
                 _save_done(ns.checkpoint, done)
             indexed += 1
-            if indexed % 25 == 0:
+            if indexed % max(1, ns.progress_every) == 0:
                 elapsed = time.perf_counter() - t_start
                 logger.info(
                     "progress files=%s chunks=%s elapsed_s=%.0f chkpt=%s",
