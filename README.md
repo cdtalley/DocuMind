@@ -184,6 +184,8 @@ Optional **`section_filter`** restricts Chroma `where` clause on metadata `secti
 
 ## 8. FLARE-inspired active retrieval
 
+**Scope:** FLARE here is **not** a substitute for RAG—it is an **optional second retrieval pass** on top of the same dense-vector RAG pipeline (retrieve → optionally retrieve again with a richer query → merge → generate). The default path is still **single-pass RAG** unless `use_flare` or `FLARE_ACTIVE_RETRIEVAL` turns this on.
+
 Full **FLARE** ([Jiang et al., arXiv:2305.06983](https://arxiv.org/abs/2305.06983)) uses **token-level confidence** to trigger mid-generation retrieval. Ollama’s chat API used here does **not** expose per-token logprobs.
 
 **Implementation:** When `use_flare` (request) or `FLARE_ACTIVE_RETRIEVAL` (settings) is true and mode ≠ `datasets`:
