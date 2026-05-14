@@ -655,6 +655,26 @@ button.btn-ghost:hover:not(:disabled) {
   word-break: break-all;
 }
 
+.corpus-raw-note {
+  font-size: 0.72rem;
+  line-height: 1.5;
+  color: var(--text-muted);
+  margin: 14px 0 0;
+  padding: 12px 14px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-subtle);
+  background: rgba(5, 8, 16, 0.65);
+}
+
+.corpus-raw-note code {
+  font-size: 0.68rem;
+  color: #bae6fd;
+}
+
+.corpus-raw-note strong {
+  color: #e2e8f0;
+}
+
 .notice {
   padding: 14px 16px;
   border-radius: 10px;

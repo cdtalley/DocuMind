@@ -39,7 +39,7 @@ This document specifies **architecture**, **control flows**, **configuration**, 
 | **Application** | FastAPI application (`app/main.py`): routing, middleware, dependency injection, lifespan-managed singletons. |
 | **Domain services** | Document parsing and chunking (`app/services/document_service.py`, `app/utils/chunker.py`); vector persistence (`app/services/embedding_service.py`); RAG orchestration (`app/services/rag_service.py`). |
 | **Model I/O** | Ollama client (`app/utils/ollama_client.py`): chat completions and per-text embeddings over HTTP. |
-| **Persistence** | Chroma persistent client on disk (`CHROMA_PERSIST_DIR`); **two** collections — `CHROMA_COLLECTION_PUBLIC` (encyclopedia-scale) and `CHROMA_COLLECTION_NAME` (papers / PDFs). Cosine space (`hnsw:space: cosine`). |
+| **Persistence** | Chroma persistent client on disk (`CHROMA_PERSIST_DIR`); **two** collections — `CHROMA_COLLECTION_PUBLIC` (encyclopedia-scale) and `CHROMA_COLLECTION_NAME` (papers / PDFs / arXiv; legacy env name for the non-public index). Cosine space (`hnsw:space: cosine`). |
 
 **Ports (convention):** API **8001**, Next.js dev **3002**, Ollama **11434**.
 
@@ -115,7 +115,7 @@ flowchart TB
   E --> C
 ```
 
-**Lifespan (`app/main.py`):** On startup, constructs `OllamaClient`, one shared **`chromadb.PersistentClient`** on `CHROMA_PERSIST_DIR`, then an **`EmbeddingRegistry`** with two **`ChromaEmbeddingService`** wrappers (papers + public collections) and two **`RAGService`** instances (`content_library` each). Sharing one client avoids double-opening the same SQLite store. Optionally runs **`seed_sample_docs`** into the **papers** collection only when **`SEED_SAMPLE_DOCS=true`**: compares `SAMPLE_CORPUS_VERSION` marker on disk to settings; on mismatch, deletes `sample_*` vectors in that collection, rewrites marker, then ingests each `data/sample_docs/*.txt` as `sample_<stem>`. The **public** collection is empty until you run **`scripts/bulk_index_public.py`** or **`scripts/build_public_corpus.py`** (or `POST /api/v1/ingest` with `library=public`).
+**Lifespan (`app/main.py`):** On startup, constructs `OllamaClient`, one shared **`chromadb.PersistentClient`** on `CHROMA_PERSIST_DIR`, then an **`EmbeddingRegistry`** with two **`ChromaEmbeddingService`** wrappers (papers + public collections) and two **`RAGService`** instances (`content_library` each). Sharing one client avoids double-opening the same SQLite store. When **`SEED_SAMPLE_DOCS=true`** (off by default; legacy DS demo path), runs **`seed_sample_docs`** into the **papers** collection only: compares `SAMPLE_CORPUS_VERSION` marker on disk to settings; on mismatch, deletes `sample_*` vectors in that collection, rewrites marker, then ingests each `data/sample_docs/*.txt` as `sample_<stem>`. **Wikipedia-first:** keep `SEED_SAMPLE_DOCS=false` and grow **`CHROMA_COLLECTION_PUBLIC`** via **`scripts/bulk_index_public.py`** / **`scripts/build_public_corpus.py`** (or `POST /api/v1/ingest` with `library=public`).
 
 **Routers** mount under `/api/v1` except health routes at root.
 
@@ -138,7 +138,11 @@ flowchart TB
 
 ### 5.3 Vector space
 
-Each Chroma collection is created with `metadata={"hnsw:space": "cosine"}`. Query results expose **distance** per hit; the RAG layer sorts ascending (**lower distance = closer match**) and keeps rows with **`distance < RELEVANCE_THRESHOLD`** before optional fallback (threshold is a tunable cutoff on this distance scale for your embedding model and corpus).
+Each Chroma collection is created with `metadata={"hnsw:space": "cosine"}`. Query results expose **distance** per hit; the RAG layer sorts ascending (**lower distance = closer match**) and keeps rows under the **library-specific** distance cutoff (`RELEVANCE_THRESHOLD` vs `PUBLIC_RELEVANCE_THRESHOLD`) before optional fallback.
+
+### 5.4 `section_filter` and library
+
+`section_filter` applies to Chroma `where` on metadata `section`. **Papers** (PDFs / arXiv): values mirror paper-heading heuristics (`abstract`, `methodology`, …). **Public** (Wikipedia-style `.txt`): most chunks are **`body`**; restrictive filters often return **no hits** — omit `section_filter` for broad public queries unless you control chunk metadata.
 
 ---
 
@@ -148,15 +152,15 @@ All logic below is implemented in `app/services/rag_service.py` unless noted.
 
 ### 6.1 Retrieval budget
 
-For a user `top_k` and `query_mode`, the service expands the **vector search** `n_results` before reranking (e.g. up to 64 for `general` / `compare`, up to 56 for other modes). This widens the candidate pool so rerank and diversity filters have material to work with.
+For a user `top_k` and `query_mode`, the service expands the **vector search** `n_results` before reranking. **Papers** library: up to **64** candidates for `general` / `compare` (roughly `4× top_k`, capped). **Public** (encyclopedia) library: wider pool (**cap 96**, multiplier **5×** `top_k` for `general`/`compare`) to improve recall on long prose. Other modes use a slightly smaller cap for public.
 
 ### 6.2 Vector search and rerank
 
 1. `embedding_service.search(embed_query, retrieve_k, section_filter)` returns rows `{content, metadata, distance}`.  
 2. **Keyword rerank:** Rows are sorted by  
-   `distance − KEYWORD_RERANK_WEIGHT × keyword_overlap_score(rerank_query, content)`  
-   so lexical overlap with the user question can reorder within a distance band.  
-3. **Threshold filter:** Keep rows with `distance < RELEVANCE_THRESHOLD`.  
+   `distance − W × keyword_overlap_score(rerank_query, content)`  
+   where `W` is **`KEYWORD_RERANK_WEIGHT`** (papers) or **`PUBLIC_KEYWORD_RERANK_WEIGHT`** (public).  
+3. **Threshold filter:** Keep rows with `distance <` **`RELEVANCE_THRESHOLD`** (papers) or **`PUBLIC_RELEVANCE_THRESHOLD`** (public). Compare mode adds a small slack bump (see `rag_service.py`).  
 4. **Fallback:** If nothing passes and `ENABLE_FALLBACK_RETRIEVAL` is true, take the top `FALLBACK_TOP_N` by rerank order and mark internally (answer may append a disclosure line).  
 5. **Diversity:** `_select_diverse_sources` prefers at most one strong chunk per `doc_id` before filling remaining slots, reducing single-document context monopolization.  
 6. **Context slot cap:** Depends on `query_mode` (e.g. up to 24 chunks for `general` / `compare`).
@@ -171,15 +175,15 @@ For a user `top_k` and `query_mode`, the service expands the **vector search** `
 
 ## 7. Query modes
 
-| `query_mode` | Behavior |
-|--------------|----------|
-| `general` | Broad grounded synthesis; higher temperature than methodology. |
-| `compare` | Cross-paper comparison framing; large retrieval budget; table-oriented prompt. |
-| `methodology` | Implementation-focused extraction; moderate temperature. |
-| `datasets` | Deterministic dataset / benchmark surfacing from chunk text. |
-| `reproduce` | Reproducibility checklist style; structured sections in prompt. |
+| `query_mode` | Papers library (`library=papers`) | Public library (`library=public`) |
+|----------------|-------------------------------------|-------------------------------------|
+| `general` | Broad grounded synthesis over research excerpts. | Same shape; prompts use **Article title** and encyclopedia-neutral tone. |
+| `compare` | Cross-**paper** comparison; table-oriented. | Cross-**article** comparison; same table pattern with article titles. |
+| `methodology` | Implementation-focused extraction from papers. | Process / mechanism extraction from encyclopedia prose. |
+| `datasets` | Deterministic dataset / benchmark hints from chunk text. | Same scanner; useful when excerpts name corpora (e.g. “Wikipedia”). |
+| `reproduce` | Reproducibility checklist for experiments. | “What could be reproduced from excerpts” framing. |
 
-Optional **`section_filter`** restricts Chroma `where` clause on metadata `section` (abstract, introduction, methodology, experiments, results, conclusion).
+Optional **`section_filter`** — see [§5.4](#54-sectionfilter-and-library).
 
 ---
 
@@ -241,12 +245,12 @@ All keys are listed in **`.env.example`**. Grouped reference:
 
 | Group | Variables | Purpose |
 |-------|-----------|---------|
-| **Models** | `OLLAMA_BASE_URL`, `LLM_MODEL`, `EMBEDDING_MODEL` | Inference endpoints and model tags. |
-| **Vector store** | `CHROMA_PERSIST_DIR`, `CHROMA_COLLECTION_NAME`, `CHROMA_COLLECTION_PUBLIC`, `DEFAULT_LIBRARY` | On-disk path; **papers** vs **public** collection names; default `library` for `/health` stats. |
+| **Models** | `OLLAMA_BASE_URL`, `LLM_MODEL`, `EMBEDDING_MODEL`, `OLLAMA_REQUEST_TIMEOUT_SEC` | Inference endpoints, model tags, HTTP timeout for chat/embed (bulk-friendly). |
+| **Vector store** | `CHROMA_PERSIST_DIR`, `CHROMA_COLLECTION_NAME` (papers), `CHROMA_COLLECTION_PUBLIC`, `DEFAULT_LIBRARY` | On-disk path; collection names; default `library` for `/health` stats. |
 | **Chunking** | `CHUNK_SIZE`, `CHUNK_OVERLAP` | Text splitter parameters; affects chunk count and context granularity. |
-| **Retrieval defaults** | `TOP_K_RESULTS`, `RELEVANCE_THRESHOLD`, `ENABLE_FALLBACK_RETRIEVAL`, `FALLBACK_TOP_N`, `KEYWORD_RERANK_WEIGHT` | Global defaults; per-request `top_k` overrides for query. |
+| **Retrieval defaults** | `TOP_K_RESULTS`, `RELEVANCE_THRESHOLD`, `PUBLIC_RELEVANCE_THRESHOLD`, `PUBLIC_KEYWORD_RERANK_WEIGHT`, `ENABLE_FALLBACK_RETRIEVAL`, `FALLBACK_TOP_N`, `KEYWORD_RERANK_WEIGHT` | Papers vs **public** distance/lexical tuning; per-request `top_k` overrides for query. |
 | **Ingest** | `MAX_FILE_SIZE_MB`, `ARXIV_BASE_URL` | Upload cap and arXiv PDF export host. |
-| **Sample corpus** | `SAMPLE_CORPUS_VERSION`, `SEED_SAMPLE_DOCS` | Bump version to purge/re-seed `sample_*` in **papers** when `SEED_SAMPLE_DOCS=true`. |
+| **Sample corpus (legacy)** | `SAMPLE_CORPUS_VERSION`, `SEED_SAMPLE_DOCS` | When `SEED_SAMPLE_DOCS=true`: bump version to purge/re-seed `sample_*` in **papers** only. Default **false** (Wikipedia-first). |
 | **Network** | `CORS_ORIGINS`, `CORS_ALLOW_ALL`, `TRUSTED_HOSTS` | Browser and Host-header policy. |
 | **App** | `APP_ENV`, `DISABLE_OPENAPI` | Environment label; docs toggle. |
 | **Security / transport** | `API_KEY`, `ENABLE_RESPONSE_GZIP` | Optional API key gate; gzip responses. |
@@ -290,9 +294,20 @@ Applied in `app/main.py` (order matters for FastAPI / Starlette):
 
 ## 14. Bundled corpus, public scale, and scripts
 
+### Measured KB metrics (repo truth vs runtime)
+
+| What | Where | Count / note |
+|------|--------|--------------|
+| `data/sample_docs/*.txt` | Git | **463** files total (**400** synthetic `sample_corpus_p7_*.txt`, **63** other curated/hand files). See [`data/sample_docs/README.md`](data/sample_docs/README.md). |
+| Chunk rows for that bundle | Chroma **papers** only if `SEED_SAMPLE_DOCS=true` | **Not in git** — derived at index time from `CHUNK_SIZE` / overlap and text length (order of magnitude: low thousands to ~10k+ for the full bundle). |
+| CI / pytest “corpus” | `tests/ranking_fake_embedding.py` | **6** synthetic `doc_id`s / **6** chunks — deterministic regression only. |
+| Wikipedia-scale public text | Operator disk + `CHROMA_COLLECTION_PUBLIC` | **Millions** of articles possible via HF streaming; credible production RAG scale story (CC BY-SA — plan attribution if you redistribute). |
+
+**Strategic default:** **`library=public`** and **offline bulk index** are the flagship path; the DS `sample_docs` bundle is **legacy / optional demo** for the papers collection.
+
 ### What ships in git (small)
 
-- **`data/sample_docs/`** — On the order of **~460** UTF-8 files (~**1 MB** text): curated summaries plus **400** synthetic `sample_corpus_p7_*.txt` from `scripts/generate_production_corpus.py`. This is **not** a massive real-world KB; it is optional demo material for the **papers** collection when `SEED_SAMPLE_DOCS=true`.  
+- **`data/sample_docs/`** — See table above and folder README. Optional demo material for **papers** when `SEED_SAMPLE_DOCS=true` (discouraged for Wikipedia-first deployments).  
 - **Chroma in the repo clone** — Often **tens of MB** after local indexing; size grows with **chunk count × (vectors + stored text + HNSW)**. Empty **public** collection adds negligible disk until you bulk-index.
 
 ### Making the **public** corpus massive (operator job)
@@ -308,7 +323,7 @@ Applied in `app/main.py` (order matters for FastAPI / Starlette):
 
 ### Other scripts
 
-- **Regeneration (papers bundle):** `python scripts/generate_production_corpus.py --count 500 --force` then bump `SAMPLE_CORPUS_VERSION` (with `SEED_SAMPLE_DOCS=true`).  
+- **Regeneration (legacy papers bundle):** `python scripts/generate_production_corpus.py --count 500 --force` then bump `SAMPLE_CORPUS_VERSION` (only with `SEED_SAMPLE_DOCS=true`).  
 - **Hand-authored expansion:** `scripts/materialize_institutional_corpus.py`.  
 - **arXiv bulk:** `scripts/bulk_ingest_arxiv.py` + `data/arxiv_seed_list.txt` (indexes **papers**).
 

@@ -13,6 +13,8 @@ Use this doc when you need to **sound like you have run and maintained** large r
 
 **Honest scale claim:** “We designed the ingestion path for **checkpointed bulk upserts** into a dedicated public collection, with **resume** after failure, and **operator visibility** via `GET /api/v1/libraries`.” That is true regardless of whether you have 10k or 10M chunks today.
 
+**Bundled `data/sample_docs/` is not the flagship KB** — see [`data/sample_docs/README.md`](../data/sample_docs/README.md) and README §14 for committed file counts vs Wikipedia scale.
+
 ## 2. How you grow the public corpus (the real pipeline)
 
 1. **Stream text to disk** (no embeddings yet):  

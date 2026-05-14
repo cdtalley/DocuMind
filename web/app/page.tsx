@@ -565,6 +565,12 @@ export default function HomePage() {
                 </>
               )}
             </div>
+            <p className="corpus-raw-note">
+              <strong>Indexed vs raw.</strong> This UI lists vectors in Chroma (above + library cards). Offline
+              Wikipedia <code>.txt</code> shards under <code>data/wiki_txt_build/</code> are not enumerated here — at
+              scale that would freeze the browser. Run <code>scripts/bulk_index_public.py</code> with a checkpoint to
+              sync disk → public collection; use <code>/api/v1/libraries</code> for truth.
+            </p>
             <button type="button" className="btn-ghost" onClick={() => void refresh()}>
               Refresh status
             </button>

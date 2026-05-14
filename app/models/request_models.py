@@ -24,7 +24,12 @@ class QueryRequest(BaseModel):
     query_mode: Literal["general", "compare", "methodology", "datasets", "reproduce"] = "general"
     section_filter: Optional[SectionFilter] = Field(
         default=None,
-        description="Restrict retrieval to chunks whose detected section matches (see chunker metadata).",
+        description=(
+            "Restrict retrieval to chunks whose `section` metadata matches. "
+            "For **library=papers** (PDFs / arXiv), sections come from heading heuristics (abstract, methodology, …). "
+            "For **library=public** (Wikipedia-style text), most chunks are labeled `body`; non-matching filters often "
+            "return no hits — omit this field for public queries unless you know sections were set."
+        ),
     )
     use_flare: bool = Field(
         default=False,

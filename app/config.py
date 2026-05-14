@@ -11,13 +11,14 @@ class Settings(BaseSettings):
     # HTTP timeouts for Ollama (embed can spike on long chunks during bulk jobs).
     OLLAMA_REQUEST_TIMEOUT_SEC: int = 120
     CHROMA_PERSIST_DIR: str = "./chroma_db"
-    # Legacy / research PDFs + optional bundled sample_docs (when SEED_SAMPLE_DOCS=true).
+    # Legacy env name: Chroma collection for PDFs / arXiv / optional sample_docs seed (papers library).
     CHROMA_COLLECTION_NAME: str = "documind_papers"
     # Primary portfolio corpus: Wikipedia or other public text bulk-indexed here.
     CHROMA_COLLECTION_PUBLIC: str = "documind_wikipedia"
     # Default API library: public (empty until bulk_index_public / ingest); papers for DS-only demos.
     DEFAULT_LIBRARY: Literal["public", "papers"] = "public"
     # When true, startup indexes data/sample_docs/* into the papers collection (synthetic DS briefs).
+    # Deprecated for Wikipedia-first / production-style deployments: leave false (default) and bulk-index public text instead.
     SEED_SAMPLE_DOCS: bool = False
     CHUNK_SIZE: int = 800
     CHUNK_OVERLAP: int = 100

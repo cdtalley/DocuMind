@@ -61,11 +61,14 @@ def _quarantine_chroma_persist_dir(persist: Path) -> None:
 
 
 def seed_sample_docs(registry: EmbeddingRegistry) -> None:
-    """Optional legacy bundle: synthetic DS briefs into the *papers* collection only."""
+    """Optional legacy bundle: synthetic DS briefs into the *papers* collection only.
+
+    Wikipedia-first deployments should keep ``SEED_SAMPLE_DOCS=false`` (default) and use
+    ``scripts/bulk_index_public.py`` / ``build_public_corpus.py`` for the public index.
+    """
     global document_service
     assert document_service is not None
     if not settings.SEED_SAMPLE_DOCS:
-        logger.info("SEED_SAMPLE_DOCS=false: skipping bundled sample_docs indexing.")
         return
     emb = registry.papers
     if ollama_client is None or not ollama_client.health_check().get("available", False):
@@ -174,10 +177,15 @@ async def lifespan(_: FastAPI):
     )
     document_service = DocumentService(chunker=chunker)
     logger.info("Ollama health: %s", ollama_client.health_check())
-    try:
-        seed_sample_docs(embedding_registry)
-    except Exception as exc:
-        logger.warning("Failed to seed sample docs: %s", exc)
+    if settings.SEED_SAMPLE_DOCS:
+        logger.warning(
+            "SEED_SAMPLE_DOCS=true: indexing bundled sample_docs into papers only. "
+            "For Wikipedia-primary deployments keep SEED_SAMPLE_DOCS=false and grow CHROMA_COLLECTION_PUBLIC via bulk jobs."
+        )
+        try:
+            seed_sample_docs(embedding_registry)
+        except Exception as exc:
+            logger.warning("Failed to seed sample docs: %s", exc)
     yield
     logger.info("DocuMind shutting down")
 
