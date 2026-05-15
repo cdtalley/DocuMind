@@ -1,7 +1,7 @@
 param(
     [string]$WebBase = "http://127.0.0.1:3002",
     [string]$ApiBase = "http://127.0.0.1:8001",
-    [int]$MinDocs = 400,
+    [int]$MinDocs = 50,
     [int]$WaitIndexMinutes = 90,
     [int]$MaxLivenessWaitMinutes = 180
 )

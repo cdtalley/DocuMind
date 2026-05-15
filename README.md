@@ -367,8 +367,8 @@ Under **`portfolio/`**: client project catalog HTML, portfolio brief HTML, optio
 ```powershell
 .\.venv\Scripts\pip install -r scripts\screenshot_requirements.txt
 .\.venv\Scripts\playwright install chromium
-.\scripts\capture_dashboard.ps1                    # waits for /health/live, Gold demo scenario (compare, Top K 24, FLARE), synthesis text, tall-viewport PNG
-# Smaller corpus / faster index gate:  .\scripts\capture_dashboard.ps1 -MinDocs 40
+.\scripts\capture_dashboard.ps1                    # waits for /health/live, baseline public scenario, synthesis text, tall-viewport PNG
+# Smaller corpus / faster index gate:  .\scripts\capture_dashboard.ps1 -MinDocs 5
 # Custom API / wait cap:                .\scripts\capture_dashboard.ps1 -ApiBase "http://127.0.0.1:8001" -MaxLivenessWaitMinutes 240
 ```
 

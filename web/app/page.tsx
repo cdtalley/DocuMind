@@ -13,7 +13,6 @@ export type ShowcaseScenario = {
   description: string;
   query: string;
   mode: string;
-  section: string;
   topK: number;
   /** When set, applies the FLARE follow-up retrieval toggle for this scenario. */
   useFlare?: boolean;
@@ -21,72 +20,75 @@ export type ShowcaseScenario = {
 
 const SHOWCASE_SCENARIOS: ShowcaseScenario[] = [
   {
-    id: "gold",
-    label: "Gold: demo & QA",
-    description:
-      "Tuned for the bundled v7 library: dense benchmark keywords + compare outline + max Top K + FLARE. Use for screenshots and stakeholder demos.",
-    query: `DEMO — Cross-paper benchmark audit (grounded synthesis only).
+    id: "baseline",
+    label: "Baseline: evidence-first summary",
+    description: "Default operator prompt: grounded summary with explicit coverage limits.",
+    query: `Using ONLY the retrieved encyclopedia-style passages, write a concise answer for a general reader.
 
-Retrieval anchors: GLUE SuperGLUE SQuAD ImageNet CIFAR MNIST Cora Citeseer PubMed LibriSpeech C4 Open Images IEEE-CIS MovieLens transformers vision CNN tabular gradient boosting graph convolution time series drift calibration ECE AdamW LoRA retrieval augmentation.
+Rules:
+- Every non-trivial claim must be traceable to a cited **Article title** from the context.
+- If the passages disagree or omit a subtopic, say so explicitly — do not invent facts.
+- End with a short "Coverage" line: what themes the excerpts did and did not support.`,
+    mode: "general",
+    topK: 10
+  },
+  {
+    id: "compare_articles",
+    label: "Compare articles",
+    description: "Structured contrast across articles the retriever surfaced — compare mode + FLARE.",
+    query: `You are synthesizing ONLY from the retrieved article excerpts (public index).
 
-Using ONLY the retrieved excerpts, produce the full compare-mode outline: ## At a glance; ## Narrative overview; ## Comparison table as a GitHub-flavored markdown table with columns: Method / paradigm | Paper (exact title from excerpt) | Datasets or benchmarks named in text | Reported claim or metric if stated | Limitation or scope | Why a practitioner would care; ## Mechanism & objective contrast (subsections for losses/objectives and for data & evaluation); ## Trade-offs & decision guide.
+Produce this outline in Markdown:
+## At a glance
+## Where the articles agree
+## Where they disagree or leave gaps (quote titles)
+## Comparison table (GFM): Theme | What article A states (title) | What article B states (title) | Confidence from excerpts only
+## What a reader should verify next
 
-Rules: No invented paper titles or datasets. If a name appears in a Keywords: line in the excerpt, you may treat it as in-scope. Where the library has no chunk for a theme, write explicitly that the excerpt set does not cover it — do not speculate.`,
+Rules: Use **Article title** strings exactly as they appear in context. If the set lacks a second article on a row, write "not in excerpt set". No external facts.
+
+Screenshot / regression note: Prefer compact tables. If fewer than three distinct article titles appear in the excerpts, say the comparison is partial and enumerate every title you did see. If any theme has thin evidence, label it and avoid filler.`,
     mode: "compare",
-    section: "All Sections",
-    topK: 24,
+    topK: 16,
     useFlare: true
   },
   {
-    id: "flagship",
-    label: "Flagship: research landscape",
-    description:
-      "Cross-paper brief: method families, datasets/benchmarks, metrics — grounded in your library.",
-    query: `Brief a technical lead using ONLY the retrieved context from my library:
-(1) Cluster findings by area: NLP/Transformers, vision, tabular boosting, graph representation learning, probabilistic time series, and RLHF/alignment where present.
-(2) For each area, list named datasets or benchmarks (e.g., GLUE, ImageNet, LibriSpeech, Cora, IEEE-CIS) and what they measure.
-(3) Cite exact paper titles for each bullet.
-If an area has no supporting chunk, state that clearly.`,
+    id: "themes",
+    label: "Cross-article themes",
+    description: "Cluster recurring topics and cite which articles support each theme.",
+    query: `From the retrieved passages only, cluster the major themes (history, geography, institutions, science concepts, etc. — whatever the excerpts actually contain).
+
+For each theme: 2–4 bullets, each bullet tied to a specific **Article title** from the context. If a theme appears weakly, label it "thin evidence" and explain why.`,
     mode: "compare",
-    section: "All Sections",
-    topK: 18
+    topK: 14
   },
   {
-    id: "datasets",
-    label: "Dataset map",
-    description: "Structured inventory of datasets and where they appear.",
-    query:
-      "Produce a cross-paper dataset inventory: every named benchmark or dataset in the context, which paper mentions it, and one-line usage from the passage.",
+    id: "entities",
+    label: "People, places, institutions",
+    description: "Entity-centric inventory grounded in chunk text.",
+    query: `List notable people, places, organizations, dates, and laws or treaties mentioned in the retrieved excerpts.
+
+Format as a table: Entity | Role in excerpts (one line) | Article title(s) that mention it.
+
+Do not add entities not present in the context. If the excerpt set is sparse, say so up front.`,
     mode: "datasets",
-    section: "All Sections",
-    topK: 18
+    topK: 12
   },
   {
-    id: "reproduce",
-    label: "Repro blueprint",
-    description: "What you would need to re-run experiments (datasets, architecture hints, metrics).",
-    query:
-      "Across the papers in context, what concrete artifacts would I need to reproduce reported results: datasets, model families, optimizers/schedules mentioned, and evaluation metrics?",
+    id: "timeline",
+    label: "Chronology from excerpts",
+    description: "Orders dated statements; reproduce mode favors extraction discipline.",
+    query: `Extract every dated or ordered historical statement you can support from the retrieved text. Output a chronological bullet list: date or era — what happened — **Article title**.
+
+If dates conflict between articles, show both versions and the titles. If dating is vague, mark as "approximate / unclear in excerpts".`,
     mode: "reproduce",
-    section: "All Sections",
-    topK: 14
-  },
-  {
-    id: "methodology",
-    label: "Methods & training",
-    description: "Implementation-focused extraction (optimizers, objectives, architectures).",
-    query:
-      "Summarize training objectives and model architectures described in context: contrastive losses, CTC, Transformers, graph convolutions, gradient boosting — tie each to paper title.",
-    mode: "methodology",
-    section: "All Sections",
-    topK: 14
+    topK: 12
   }
 ];
 
 const DEFAULT_SCENARIO = SHOWCASE_SCENARIOS[0];
 
-const INITIAL_PUBLIC_QUERY =
-  "What do the retrieved passages state? Summarize using only that evidence and cite **Article title** from the context.";
+const INITIAL_PUBLIC_QUERY = DEFAULT_SCENARIO.query;
 
 type Source = {
   doc_id: string;
@@ -156,10 +158,10 @@ const PRESET_LIBRARY: PaperCard[] = [
 
 const modes = [
   { label: "General Q&A", value: "general" },
-  { label: "Compare Methods", value: "compare" },
-  { label: "Methodology Deep Dive", value: "methodology" },
-  { label: "Dataset Finder", value: "datasets" },
-  { label: "Reproduce Results", value: "reproduce" }
+  { label: "Compare across articles", value: "compare" },
+  { label: "Topic deep dive", value: "methodology" },
+  { label: "Entity & fact inventory", value: "datasets" },
+  { label: "Chronology / provenance", value: "reproduce" }
 ];
 
 type NoticeTone = "info" | "success" | "error";
@@ -221,17 +223,14 @@ export default function HomePage() {
   const [loading, setLoading] = useState(false);
   const [query, setQuery] = useState(INITIAL_PUBLIC_QUERY);
   const [mode, setMode] = useState(DEFAULT_SCENARIO.mode);
-  const [section, setSection] = useState(DEFAULT_SCENARIO.section);
   const [topK, setTopK] = useState(DEFAULT_SCENARIO.topK);
-  const [useFlare, setUseFlare] = useState(false);
-  const [corpusLibrary, setCorpusLibrary] = useState<"public" | "papers">("public");
+  const [useFlare, setUseFlare] = useState(Boolean(DEFAULT_SCENARIO.useFlare));
   const [flareFollowUp, setFlareFollowUp] = useState(false);
   const [answer, setAnswer] = useState("");
   const [sources, setSources] = useState<Source[]>([]);
   const [confidence, setConfidence] = useState(0);
   const [hasAnswer, setHasAnswer] = useState(true);
   const [chunksSearched, setChunksSearched] = useState<number | null>(null);
-  const [arxivId, setArxivId] = useState("");
   const [notice, setNotice] = useState("");
   const [noticeTone, setNoticeTone] = useState<NoticeTone>("info");
   const [apiHealthy, setApiHealthy] = useState(true);
@@ -267,7 +266,7 @@ export default function HomePage() {
     try {
       const [healthPayload, papersPayload, librariesPayload] = await Promise.all([
         fetchJson<HealthPayload>("/health"),
-        fetchJson<PaperCard[]>(`/api/v1/papers?library=${encodeURIComponent(corpusLibrary)}`),
+        fetchJson<PaperCard[]>(`/api/v1/papers?library=${encodeURIComponent("public")}`),
         fetchJson<LibrariesPayload>("/api/v1/libraries")
       ]);
       setHealth(healthPayload);
@@ -290,7 +289,7 @@ export default function HomePage() {
 
   useEffect(() => {
     void refresh();
-  }, [corpusLibrary]);
+  }, []);
 
   const runQuery = useCallback(async () => {
     setLoading(true);
@@ -302,10 +301,10 @@ export default function HomePage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           query,
-          library: corpusLibrary,
+          library: "public",
           top_k: topK,
           query_mode: mode,
-          section_filter: section === "All Sections" ? null : section,
+          section_filter: null,
           use_flare: useFlare
         })
       });
@@ -322,7 +321,7 @@ export default function HomePage() {
     } finally {
       setLoading(false);
     }
-  }, [query, topK, mode, section, useFlare, corpusLibrary]);
+  }, [query, topK, mode, useFlare]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -343,11 +342,9 @@ export default function HomePage() {
   const applyScenario = (s: ShowcaseScenario) => {
     setQuery(s.query);
     setMode(s.mode);
-    setSection(s.section);
     setTopK(s.topK);
-    setCorpusLibrary("papers");
-    if (typeof s.useFlare === "boolean") setUseFlare(s.useFlare);
-    setNotice(`Loaded scenario: ${s.label} (papers library)`);
+    setUseFlare(typeof s.useFlare === "boolean" ? s.useFlare : false);
+    setNotice(`Loaded scenario: ${s.label} (public index)`);
     setNoticeTone("success");
   };
 
@@ -363,35 +360,14 @@ export default function HomePage() {
       for (const file of Array.from(files)) {
         const form = new FormData();
         form.append("file", file);
-        form.append("library", corpusLibrary);
+        form.append("library", "public");
         await fetchJson(`/api/v1/ingest`, { method: "POST", body: form });
       }
-      setNotice("Upload complete — library refreshed.");
+      setNotice("Upload complete — public index refreshed.");
       setNoticeTone("success");
       await refresh();
     } catch (error) {
       setNotice(error instanceof Error ? error.message : "Upload failed");
-      setNoticeTone("error");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const fetchArxiv = async () => {
-    if (!arxivId.trim()) return;
-    setLoading(true);
-    setNotice("");
-    try {
-      const data = await fetchJson<{ title: string }>("/api/v1/fetch-arxiv", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ arxiv_id: arxivId.trim() })
-      });
-      setNotice(`Fetched and indexed: ${data.title}`);
-      setNoticeTone("success");
-      await refresh();
-    } catch (error) {
-      setNotice(error instanceof Error ? error.message : "ArXiv fetch failed");
       setNoticeTone("error");
     } finally {
       setLoading(false);
@@ -412,8 +388,8 @@ export default function HomePage() {
 
   const deletePaper = async (docId: string) => {
     try {
-      await fetchJson(`/api/v1/papers/${docId}?library=${encodeURIComponent(corpusLibrary)}`, { method: "DELETE" });
-      setNotice("Paper removed.");
+      await fetchJson(`/api/v1/papers/${docId}?library=public`, { method: "DELETE" });
+      setNotice("Article removed from public index.");
       setNoticeTone("success");
       await refresh();
     } catch (error) {
@@ -439,8 +415,8 @@ export default function HomePage() {
 
   const indexedPapers = health?.collection_stats.paper_count ?? libraryStats.totalPapers;
   const indexedChunks = health?.collection_stats.total_chunks ?? libraryStats.totalChunks;
-  const totalDualChunks =
-    libraries != null ? libraries.public.total_chunks + libraries.papers.total_chunks : indexedChunks;
+  const publicArticleCount = libraries?.public.paper_count ?? indexedPapers;
+  const publicChunkCount = libraries?.public.total_chunks ?? indexedChunks;
 
   return (
     <div className="app-root">
@@ -453,11 +429,12 @@ export default function HomePage() {
           <div>
             <div className="enterprise-topbar__title">DocuMind</div>
             <div className="enterprise-topbar__subtitle">
-              Dual-library RAG (public + papers) · Chroma · Ollama · FastAPI
+              Public-corpus operator console · Chroma · Ollama · FastAPI
               {libraries ? (
                 <span className="enterprise-topbar__default-lib">
                   {" "}
-                  · default query library: <strong>{libraries.default_library}</strong>
+                  · queries use <strong>public</strong> index · legacy papers collection:{" "}
+                  <strong>{libraries.papers.total_chunks.toLocaleString()}</strong> vectors
                 </span>
               ) : null}
             </div>
@@ -510,10 +487,10 @@ export default function HomePage() {
           Runs on localhost by default
         </span>
         <span className="demo-trust-bar__item" role="listitem">
-          Five query modes (incl. compare / datasets)
+          Five retrieval modes (same API; tuned prompts)
         </span>
         <span className="demo-trust-bar__item" role="listitem">
-          Ingest API + optional arXiv pull
+          Ingest plain text, PDF, or Word into the public collection
         </span>
         <span className="demo-trust-bar__item" role="listitem">
           Live dual-index snapshot via /api/v1/libraries
@@ -524,8 +501,8 @@ export default function HomePage() {
         <aside className="sidebar">
           <h1 className="sidebar-title">Control plane</h1>
           <p className="sidebar-tagline">
-            Same data the UI uses: <code>/health</code> and <code>/api/v1/papers</code>. Refresh after ingest or
-            re-index.
+            Same data the UI uses: <code>/health</code>, <code>/api/v1/libraries</code>, and{" "}
+            <code>/api/v1/papers?library=public</code>. Refresh after bulk index or ingest.
           </p>
           <p className="pill">Ollama · Chroma · FastAPI</p>
           <p className="api-hint">Dashboard uses this endpoint for all requests.</p>
@@ -581,45 +558,47 @@ export default function HomePage() {
           <div className="card card--hero">
             <div className="card-hero-head">
               <div>
-                <h2 className="card-hero-title">Cross-document retrieval</h2>
+                <h2 className="card-hero-title">Wikipedia-scale public retrieval</h2>
                 <p className="card-hero-lead">
-                  Modes alter retrieval budget, section scope, and prompt shape. Response: Markdown synthesis,
-                  confidence score, source cards (chunk text, cosine distance). Optional second retrieval pass (FLARE-style).
-                  Load a scenario, run query, expand Sources.
+                  Operator UI targets the <strong>public</strong> Chroma collection: bulk path{" "}
+                  <code>scripts/bulk_index_public.py</code>, checkpoint resume, and <code>/api/v1/libraries</code> for
+                  ground truth. Modes change retrieval budget and prompt shape; answers are Markdown with citations and
+                  optional FLARE-style second pass.
                 </p>
               </div>
               <span className="kbd-hint" title="Submit from the question field">
                 Ctrl+Enter
               </span>
             </div>
-            <div className="hero-metrics" aria-label="Index snapshot">
+            <div className="hero-metrics" aria-label="Public index snapshot">
               {libraries ? (
                 <>
                   <div className="hero-metric">
-                    <div className="hero-metric__value">{libraries.public.total_chunks.toLocaleString()}</div>
-                    <div className="hero-metric__label">Public index chunks</div>
+                    <div className="hero-metric__value">{libraries.public.paper_count.toLocaleString()}</div>
+                    <div className="hero-metric__label">Articles (public)</div>
                   </div>
                   <div className="hero-metric">
-                    <div className="hero-metric__value">{libraries.papers.total_chunks.toLocaleString()}</div>
-                    <div className="hero-metric__label">Papers index chunks</div>
+                    <div className="hero-metric__value">{libraries.public.total_chunks.toLocaleString()}</div>
+                    <div className="hero-metric__label">Vectors (public)</div>
                   </div>
                   <div className="hero-metric">
                     <div className="hero-metric__value">{modes.length}</div>
                     <div className="hero-metric__label">Retrieval modes</div>
                   </div>
                   <p className="hero-metrics-foot">
-                    <strong>{totalDualChunks.toLocaleString()}</strong> total vectors across both Chroma collections
+                    Primary collection <strong>{libraries.public.collection_name}</strong> · papers index retained for
+                    API compatibility — not used by this console
                   </p>
                 </>
               ) : (
                 <>
                   <div className="hero-metric">
-                    <div className="hero-metric__value">{indexedPapers}</div>
-                    <div className="hero-metric__label">Indexed documents</div>
+                    <div className="hero-metric__value">{publicArticleCount.toLocaleString()}</div>
+                    <div className="hero-metric__label">Articles (public)</div>
                   </div>
                   <div className="hero-metric">
-                    <div className="hero-metric__value">{indexedChunks.toLocaleString()}</div>
-                    <div className="hero-metric__label">Vector chunks</div>
+                    <div className="hero-metric__value">{publicChunkCount.toLocaleString()}</div>
+                    <div className="hero-metric__label">Vectors (public)</div>
                   </div>
                   <div className="hero-metric">
                     <div className="hero-metric__value">{modes.length}</div>
@@ -640,11 +619,11 @@ export default function HomePage() {
             {loading && <div className="loading-strip" aria-hidden />}
 
             <div className="card card--inset showcase-section">
-              <span className="section-eyebrow">Sample prompts</span>
-              <strong>Showcase scenarios</strong>
+              <span className="section-eyebrow">Operator prompts</span>
+              <strong>Public corpus scenarios</strong>
               <p className="showcase-section__intro">
-                Long prompts tuned for a mixed-topic corpus. A card loads query text, mode, section filter, and Top K;
-                then use Run query or Submit.
+                Each card loads a long-form prompt, mode, and Top K tuned for encyclopedia-scale retrieval. Queries
+                always hit the <strong>public</strong> index. Use Run query or Submit.
               </p>
               <div className="showcase-grid">
                 {SHOWCASE_SCENARIOS.map((s, idx) => (
@@ -652,6 +631,7 @@ export default function HomePage() {
                     key={s.id}
                     type="button"
                     className="showcase-btn"
+                    data-scenario={s.id}
                     onClick={() => applyScenario(s)}
                     disabled={loading}
                   >
@@ -665,7 +645,7 @@ export default function HomePage() {
 
           <div className="grid two workspace-actions">
             <button type="button" className="btn-ghost" onClick={loadDemoPreset} disabled={loading}>
-              Reset to flagship
+              Reset to baseline
             </button>
             <button type="button" className="btn-cta" onClick={() => void runQuery()} disabled={loading}>
               {loading ? "Running…" : "Run query"}
@@ -681,21 +661,9 @@ export default function HomePage() {
                 rows={5}
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
-                placeholder={INITIAL_PUBLIC_QUERY.slice(0, 120) + "…"}
+                placeholder="Ask a question grounded in the public index…"
                 className="query-textarea"
               />
-            </div>
-            <div>
-              <label htmlFor="corpus-library">Library</label>
-              <select
-                id="corpus-library"
-                name="library"
-                value={corpusLibrary}
-                onChange={(e) => setCorpusLibrary(e.target.value as "public" | "papers")}
-              >
-                <option value="public">Public (Wikipedia-scale index)</option>
-                <option value="papers">Papers (PDFs / arXiv / legacy bundle)</option>
-              </select>
             </div>
             <div>
               <label htmlFor="query-mode">Mode</label>
@@ -705,23 +673,6 @@ export default function HomePage() {
                     {m.label}
                   </option>
                 ))}
-              </select>
-            </div>
-            <div>
-              <label htmlFor="section-filter">Section</label>
-              <select
-                id="section-filter"
-                name="section_filter"
-                value={section}
-                onChange={(e) => setSection(e.target.value)}
-              >
-                {["All Sections", "abstract", "introduction", "methodology", "experiments", "results", "conclusion"].map(
-                  (s) => (
-                    <option key={s} value={s}>
-                      {s}
-                    </option>
-                  )
-                )}
               </select>
             </div>
             <div>
@@ -747,7 +698,8 @@ export default function HomePage() {
                   disabled={mode === "datasets"}
                 />
                 <span>
-                  FLARE-style active retrieval (extra draft + possible second search). Off for Dataset Finder mode.
+                  FLARE-style active retrieval (extra draft + possible second search). Off for the entity-inventory
+                  mode.
                 </span>
               </label>
             </div>
@@ -796,7 +748,8 @@ export default function HomePage() {
 
               {!hasAnswer && (
                 <div className="notice notice--warn" style={{ marginTop: 12 }}>
-                  No grounded answer from the current index — try uploading more papers, raising Top K, or rephrasing.
+                  No grounded answer from the public index — raise Top K, switch mode, bulk-index more articles, or
+                  rephrase.
                 </div>
               )}
 
@@ -845,44 +798,33 @@ export default function HomePage() {
           )}
           </div>
 
-        <div className="grid two">
-          <div className="card">
-            <h2 className="card-h2">Upload papers</h2>
-            <label htmlFor="ingest-files" className="visually-hidden">
-              Choose PDF, Word, or text files to index
-            </label>
-            <input
-              id="ingest-files"
-              type="file"
-              multiple
-              accept=".pdf,.docx,.txt"
-              onChange={(e) => void uploadFiles(e.target.files)}
-            />
-          </div>
-          <div className="card">
-            <h2 className="card-h2">Fetch from arXiv</h2>
-            <label htmlFor="arxiv-id-input">arXiv ID</label>
-            <input
-              id="arxiv-id-input"
-              name="arxiv_id"
-              value={arxivId}
-              onChange={(e) => setArxivId(e.target.value)}
-              placeholder="1706.03762"
-            />
-            <button type="button" className="ingest-actions btn-cta" onClick={() => void fetchArxiv()}>
-              Fetch PDF
-            </button>
-          </div>
+        <div className="card">
+          <h2 className="card-h2">Ingest into public index</h2>
+          <p style={{ color: "var(--text-muted)", fontSize: 14, marginTop: 0 }}>
+            Small files only — for Wikipedia-scale loads use <code>scripts/bulk_index_public.py</code> with a
+            checkpoint.
+          </p>
+          <label htmlFor="ingest-files" className="visually-hidden">
+            Choose PDF, Word, or text files to index
+          </label>
+          <input
+            id="ingest-files"
+            type="file"
+            multiple
+            accept=".pdf,.docx,.txt"
+            onChange={(e) => void uploadFiles(e.target.files)}
+          />
         </div>
 
         <div className="card">
           <div className="library-card-header">
-            <h2 className="card-h2">{corpusLibrary === "public" ? "Public corpus" : "Paper library"}</h2>
-            <span className="library-count">{indexedPapers} in index</span>
+            <h2 className="card-h2">Articles in public index</h2>
+            <span className="library-count">{publicArticleCount.toLocaleString()} in index</span>
           </div>
           {papers.length === 0 ? (
             <p style={{ color: "var(--text-muted)" }}>
-              No vectors yet — start the API with Ollama so bundled samples index, or upload / fetch above.
+              No public vectors yet — run <code>scripts/bulk_index_public.py</code> against your <code>.txt</code>{" "}
+              shards, or ingest a small file above. Use <code>/api/v1/libraries</code> to confirm counts.
             </p>
           ) : null}
           <div className="library-grid">
@@ -899,7 +841,7 @@ export default function HomePage() {
                 )}
                 {!paper.doc_id.startsWith("preset_") && paper.doc_id !== "__catalog__" && (
                   <button type="button" className="btn-ghost" style={{ marginTop: 12 }} onClick={() => void deletePaper(paper.doc_id)}>
-                    Remove from library
+                    Remove from index
                   </button>
                 )}
               </div>

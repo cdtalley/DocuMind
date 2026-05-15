@@ -2,10 +2,14 @@ import requests
 import streamlit as st
 
 API_BASE_URL = "http://127.0.0.1:8001"
+LIBRARY = "public"
 
-st.set_page_config(page_title="DocuMind", page_icon="🔬", layout="wide")
-st.title("🔬 DocuMind")
-st.caption("Dual-library RAG: public (Wikipedia-scale) + papers (PDFs / arXiv). Set SEED_SAMPLE_DOCS for bundled samples.")
+st.set_page_config(page_title="DocuMind · Public corpus", page_icon="📚", layout="wide")
+st.title("DocuMind — public index")
+st.caption(
+    "Streamlit mirror of the operator path: queries and ingest target the **public** Chroma collection only. "
+    "Bulk Wikipedia-scale loads: `scripts/bulk_index_public.py`."
+)
 
 if "chat_history" not in st.session_state:
     st.session_state.chat_history = []
@@ -21,59 +25,58 @@ def api_post(path: str, payload: dict):
 
 with st.sidebar:
     st.header("DocuMind")
-    library = st.selectbox(
-        "Library",
-        options=["public", "papers"],
-        index=0,
-        format_func=lambda x: "Public (Wikipedia index)" if x == "public" else "Papers (PDFs / arXiv)",
-    )
     try:
         health = api_get("/health").json()
         st.success("Ollama online" if health.get("ollama_available") else "Ollama offline")
         st.write(f"LLM: `{health.get('llm_model', '-')}`")
         st.write(f"Embedding: `{health.get('embedding_model', '-')}`")
-        stats = health.get("collection_stats", {})
-        st.metric("Papers", stats.get("paper_count", 0))
-        st.metric("Chunks", stats.get("total_chunks", 0))
+        lib = api_get("/api/v1/libraries")
+        if lib.status_code == 200:
+            data = lib.json()
+            pub = data.get("public", {})
+            st.metric("Public articles", pub.get("paper_count", 0))
+            st.metric("Public vectors", pub.get("total_chunks", 0))
+            st.caption(f"Collection `{pub.get('collection_name', '')}`")
+        else:
+            stats = health.get("collection_stats", {})
+            st.metric("Articles (health view)", stats.get("paper_count", 0))
+            st.metric("Chunks", stats.get("total_chunks", 0))
     except Exception as exc:
         st.error(f"API unavailable: {exc}")
 
-tabs = st.tabs(["🔍 Ask Papers", "📄 Upload Paper", "🌐 Fetch from ArXiv", "📚 Paper Library"])
+tabs = st.tabs(["Ask (public index)", "Upload to public", "Articles in index"])
 
 mode_mapping = {
     "General Q&A": "general",
-    "Compare Methods": "compare",
-    "Methodology Deep Dive": "methodology",
-    "Dataset Finder": "datasets",
-    "Reproduce Results": "reproduce",
+    "Compare across articles": "compare",
+    "Topic deep dive": "methodology",
+    "Entity & fact inventory": "datasets",
+    "Chronology / provenance": "reproduce",
 }
 
 with tabs[0]:
-    mode_label = st.radio("Query Mode", list(mode_mapping.keys()), horizontal=True)
-    section = st.selectbox(
-        "Section Filter",
-        ["All Sections", "abstract", "introduction", "methodology", "experiments", "results", "conclusion"],
-    )
-    top_k = st.slider("Top K", 3, 24, 6)
+    mode_label = st.radio("Query mode", list(mode_mapping.keys()), horizontal=True)
+    top_k = st.slider("Top K", 3, 24, 10)
     use_flare = st.checkbox(
         "FLARE-style active retrieval (draft + possible 2nd search)",
         value=False,
-        disabled=(mode_label == "Dataset Finder"),
-        help="Ignored for Dataset Finder. Adds one short LLM draft before optionally merging a second retrieval pass.",
+        disabled=(mode_label == "Entity & fact inventory"),
+        help="Ignored for entity-inventory mode.",
     )
     query = st.text_area(
-        "Question", placeholder="e.g. What datasets were used for tabular fraud detection?"
+        "Question",
+        placeholder="Grounded question — answers use only retrieved passages from the public index.",
     )
-    if st.button("Ask DocuMind", use_container_width=True) and query.strip():
+    if st.button("Run query", use_container_width=True) and query.strip():
         payload = {
             "query": query.strip(),
-            "library": library,
+            "library": LIBRARY,
             "top_k": top_k,
             "query_mode": mode_mapping[mode_label],
-            "section_filter": None if section == "All Sections" else section,
+            "section_filter": None,
             "use_flare": bool(use_flare),
         }
-        with st.spinner("Reasoning over your paper library..."):
+        with st.spinner("Retrieving from public index…"):
             resp = api_post("/api/v1/query", payload)
         if resp.status_code == 200:
             data = resp.json()
@@ -85,10 +88,10 @@ with tabs[0]:
             if data.get("flare_followup_retrieval"):
                 st.caption("Retrieval: FLARE follow-up pass merged into context.")
             if not data.get("has_answer"):
-                st.warning("No strong answer found in current library.")
+                st.warning("No strong answer from the current public index.")
             for i, src in enumerate(data.get("sources", []), start=1):
                 with st.expander(
-                    f"📄 Source {i}: {src.get('paper_title', 'Unknown')} ({src.get('year', '-')}) — {src.get('section', 'body')}"
+                    f"Source {i}: {src.get('paper_title', 'Unknown')} ({src.get('year', '-')}) — {src.get('section', 'body')}"
                 ):
                     st.write(src.get("content_preview", ""))
             st.session_state.chat_history.append(
@@ -102,67 +105,46 @@ with tabs[0]:
             st.write(exchange["answer"])
 
 with tabs[1]:
-    files = st.file_uploader("Upload papers", type=["pdf", "docx", "txt"], accept_multiple_files=True)
-    if files and st.button("Upload Selected Files", use_container_width=True):
+    files = st.file_uploader("Upload to public index", type=["pdf", "docx", "txt"], accept_multiple_files=True)
+    if files and st.button("Upload selected files", use_container_width=True):
         for item in files:
             files_payload = {"file": (item.name, item.getvalue(), item.type or "application/octet-stream")}
             response = requests.post(
                 f"{API_BASE_URL}/api/v1/ingest",
                 files=files_payload,
-                data={"library": library},
+                data={"library": LIBRARY},
                 timeout=180,
             )
             if response.status_code == 200:
                 payload = response.json()
-                st.success(f"Uploaded {payload['filename']}")
+                st.success(f"Indexed {payload['filename']}")
                 st.write(
-                    f"Title: {payload['title']} | Authors: {payload['authors']} | Year: {payload['year']} | Chunks: {payload['chunks_created']} | {payload['processing_time_ms']:.1f} ms"
+                    f"Title: {payload['title']} | Chunks: {payload['chunks_created']} | {payload['processing_time_ms']:.1f} ms"
                 )
             else:
                 st.error(f"{item.name}: {response.text}")
 
 with tabs[2]:
-    arxiv_id = st.text_input("ArXiv Paper ID", placeholder="e.g. 1706.03762 or 2401.12345")
-    if st.button("Fetch from ArXiv", use_container_width=True) and arxiv_id.strip():
-        response = api_post("/api/v1/fetch-arxiv", {"arxiv_id": arxiv_id.strip()})
-        if response.status_code == 200:
-            payload = response.json()
-            st.success(f"Fetched {payload['title']}")
-            st.write(
-                f"Authors: {payload['authors']} | Year: {payload['year']} | Chunks: {payload['chunks_created']}"
-            )
-            clean_id = arxiv_id.strip().replace("arXiv:", "")
-            st.markdown(f"[Open on arXiv](https://arxiv.org/abs/{clean_id})")
-        else:
-            st.error(response.text)
-
-with tabs[3]:
-    response = api_get(f"/api/v1/papers?library={library}")
+    response = api_get(f"/api/v1/papers?library={LIBRARY}")
     if response.status_code != 200:
         st.error(response.text)
     else:
         papers = response.json()
         if not papers:
-            st.info("Your library is empty. Upload a paper or fetch one from ArXiv.")
+            st.info("Public index is empty. Use bulk_index_public.py or the Upload tab.")
         else:
             total_chunks = sum(p["chunk_count"] for p in papers)
-            st.write(f"Total papers: **{len(papers)}** | Total chunks: **{total_chunks}**")
+            st.write(f"Articles: **{len(papers)}** | Vectors: **{total_chunks}**")
             for paper in papers:
                 cols = st.columns([10, 2])
                 with cols[0]:
-                    st.subheader(f"📄 {paper['title']}")
-                    arxiv_id = paper.get("arxiv_id", "")
-                    if arxiv_id:
-                        st.markdown(
-                            f"{paper['authors']} — {paper['year']} — [arXiv:{arxiv_id}](https://arxiv.org/abs/{arxiv_id})"
-                        )
-                    else:
-                        st.write(f"{paper['authors']} — {paper['year']}")
+                    st.subheader(paper["title"])
+                    st.write(f"{paper.get('authors', '')} — {paper.get('year', '')}")
                     st.caption(f"Chunks: {paper['chunk_count']}")
                 with cols[1]:
-                    if st.button("🗑️ Delete", key=paper["doc_id"]):
+                    if st.button("Delete", key=paper["doc_id"]):
                         requests.delete(
-                            f"{API_BASE_URL}/api/v1/papers/{paper['doc_id']}?library={library}",
+                            f"{API_BASE_URL}/api/v1/papers/{paper['doc_id']}?library={LIBRARY}",
                             timeout=60,
                         )
                         st.rerun()

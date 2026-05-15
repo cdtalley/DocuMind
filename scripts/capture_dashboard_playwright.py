@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-Drive the Next.js dashboard: wait until the API has indexed enough papers, run a showcase query,
-wait until the synthesis body is non-trivial, then write a PNG that shows the system in action.
+Drive the Next.js dashboard: wait until the API reports enough indexed documents, run an operator
+scenario query on the public index, wait until the synthesis body is non-trivial, then write a PNG.
 
 Viewport capture uses a fixed height cap (default 3200px) and scrolls the synthesis panel into view.
 Never trust documentElement.scrollHeight for screenshots — long Markdown answers can exceed 90kpx and
@@ -10,8 +10,7 @@ produce an unusable vertical strip when scaled down.
 The default 1000×750 catalog thumb is a Sentinel-style typography tile (no scaled UI); use
 --plain-catalog-thumb for a simple top-crop from the dashboard PNG.
 
-First boot after SAMPLE_CORPUS_VERSION bump can take a long time (many embeds). Use --min-docs lower for a smaller
-corpus, or raise --wait-index-ms for a full v7 seed.
+Use --min-docs lower for a sparse public index, or raise --wait-index-ms when bulk indexing is still running.
 """
 from __future__ import annotations
 
@@ -49,15 +48,15 @@ def main() -> int:
     parser.add_argument("--out", type=Path, default=DEFAULT_OUT, help="Output PNG path")
     parser.add_argument(
         "--scenario",
-        choices=("gold", "flagship", "datasets", "reproduce", "methodology"),
-        default="gold",
-        help="Showcase card before Run query (default: gold — demo-tuned compare query, Top K 24, FLARE on).",
+        choices=("baseline", "compare_articles", "themes", "entities", "timeline"),
+        default="baseline",
+        help="Showcase card (data-scenario) before Run query (default: baseline).",
     )
     parser.add_argument(
         "--min-docs",
         type=int,
-        default=400,
-        help="Wait until topbar text matches at least this many indexed papers (default 400 for full v7 corpus).",
+        default=50,
+        help="Wait until page text matches at least this many indexed docs (regex on 'N docs').",
     )
     parser.add_argument(
         "--wait-index-ms",
@@ -124,15 +123,6 @@ def main() -> int:
         print("Browsers: .venv\\Scripts\\playwright install chromium", file=sys.stderr)
         return 1
 
-    label_map = {
-        "gold": "Gold: demo & QA",
-        "flagship": "Flagship: research landscape",
-        "datasets": "Dataset map",
-        "reproduce": "Repro blueprint",
-        "methodology": "Methods & training",
-    }
-    scenario_label = label_map[args.scenario]
-
     args.out.parent.mkdir(parents=True, exist_ok=True)
 
     if args.thumb_only:
@@ -173,14 +163,14 @@ def main() -> int:
         page.wait_for_function(js, timeout=args.wait_index_ms)
         page.get_by_role("button", name="Refresh status").click()
         page.wait_for_timeout(1500)
-        page.get_by_role("button", name=scenario_label).click()
+        page.locator(f'[data-scenario="{args.scenario}"]').click()
         page.wait_for_timeout(500)
         page.get_by_role("button", name="Run query").first.click()
         page.get_by_role("heading", name="Synthesis").wait_for(state="visible", timeout=args.timeout_ms)
 
         min_chars = max(20, args.min_answer_chars)
-        if args.scenario == "gold":
-            min_chars = max(min_chars, 900)
+        if args.scenario == "compare_articles":
+            min_chars = max(min_chars, 600)
         page.wait_for_function(
             f"""() => {{
               const el = document.querySelector(".prose-answer");
