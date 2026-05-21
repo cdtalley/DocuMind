@@ -68,6 +68,36 @@ def test_query_use_flare_reflects_in_response(client) -> None:
     body = response.json()
     assert body["flare_enabled"] is True
     assert "flare_followup_retrieval" in body
+    assert body["retrieval_strategy"] == "flare"
+
+
+def test_query_retrieval_strategy_hyde_echo(client) -> None:
+    ingest = client.post(
+        "/api/v1/ingest",
+        files={
+            "file": (
+                "hyde_test.txt",
+                b"Retrieval strategy test document about vector search and embeddings.",
+                "text/plain",
+            )
+        },
+    )
+    assert ingest.status_code == 200
+
+    response = client.post(
+        "/api/v1/query",
+        json={
+            "query": "What is this document about?",
+            "top_k": 4,
+            "query_mode": "general",
+            "retrieval_strategy": "hyde",
+            "retrieve_only": True,
+        },
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert body["retrieval_strategy"] in ("hyde", "baseline")
+    assert body["answer"] == ""
 
 
 def test_arxiv_invalid_id(client) -> None:

@@ -6,6 +6,8 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://127.0.0.1:8001";
+/** Increment when shipping visible UI or diagnostics changes. */
+const DASHBOARD_UI_VERSION = "1.1.0";
 
 export type ShowcaseScenario = {
   id: string;
@@ -22,7 +24,7 @@ const SHOWCASE_SCENARIOS: ShowcaseScenario[] = [
   {
     id: "baseline",
     label: "Baseline: evidence-first summary",
-    description: "Default operator prompt: grounded summary with explicit coverage limits.",
+    description: "Grounded summary with explicit coverage limits.",
     query: `Using ONLY the retrieved encyclopedia-style passages, write a concise answer for a general reader.
 
 Rules:
@@ -144,11 +146,50 @@ type QueryResponse = {
   library?: string;
 };
 
+type DiagnosticsPayload = {
+  api_version: string;
+  openapi_disabled: boolean;
+  git_sha: string;
+  app_env: string;
+  process_started_at_utc: string;
+  uptime_seconds: number;
+  python_version: string;
+  seed_sample_docs: boolean;
+  sample_corpus_version: string;
+  default_library: string;
+  chroma_persist_basename: string;
+  chroma_collection_public: string;
+  chroma_collection_papers: string;
+  chunk_size: number;
+  chunk_overlap: number;
+  top_k_default: number;
+  relevance_threshold_papers: number;
+  public_relevance_threshold: number;
+  keyword_rerank_weight_papers: number;
+  public_keyword_rerank_weight: number;
+  enable_fallback_retrieval: boolean;
+  flare_active_retrieval_default: boolean;
+  public_chunks: number;
+  public_docs: number;
+  papers_chunks: number;
+  papers_docs: number;
+};
+
+function formatUptime(totalSec: number): string {
+  const s = Math.max(0, Math.floor(totalSec % 60));
+  const m = Math.max(0, Math.floor(totalSec / 60) % 60);
+  const h = Math.floor(totalSec / 3600);
+  if (h > 48) return `${Math.floor(h / 24)}d ${h % 24}h`;
+  if (h > 0) return `${h}h ${m}m`;
+  if (m > 0) return `${m}m ${s}s`;
+  return `${s}s`;
+}
+
 const PRESET_LIBRARY: PaperCard[] = [
   {
     doc_id: "__catalog__",
     filename: "Public index",
-    title: "Public library (Wikipedia-scale) — index with scripts/bulk_index_public.py or ingest here",
+    title: "Public index — bulk script or small-file ingest",
     authors: "Primary corpus",
     year: "",
     arxiv_id: "",
@@ -237,6 +278,7 @@ export default function HomePage() {
   const [lastSync, setLastSync] = useState<Date | null>(null);
   const [modelUsed, setModelUsed] = useState<string | null>(null);
   const [libraries, setLibraries] = useState<LibrariesPayload | null>(null);
+  const [diagnostics, setDiagnostics] = useState<DiagnosticsPayload | null>(null);
 
   const libraryStats = useMemo(
     () => ({
@@ -264,14 +306,16 @@ export default function HomePage() {
 
   const refresh = async () => {
     try {
-      const [healthPayload, papersPayload, librariesPayload] = await Promise.all([
+      const [healthPayload, papersPayload, librariesPayload, diagPayload] = await Promise.all([
         fetchJson<HealthPayload>("/health"),
         fetchJson<PaperCard[]>(`/api/v1/papers?library=${encodeURIComponent("public")}`),
-        fetchJson<LibrariesPayload>("/api/v1/libraries")
+        fetchJson<LibrariesPayload>("/api/v1/libraries"),
+        fetchJson<DiagnosticsPayload>("/api/v1/diagnostics")
       ]);
       setHealth(healthPayload);
       setPapers(papersPayload);
       setLibraries(librariesPayload);
+      setDiagnostics(diagPayload);
       setApiHealthy(true);
       setLastSync(new Date());
       setNotice("");
@@ -280,6 +324,7 @@ export default function HomePage() {
       setHealth(null);
       setPapers([]);
       setLibraries(null);
+      setDiagnostics(null);
       setNotice(
         `API unreachable at ${API_BASE_URL}. Run: .\\start_documind.ps1 from the project root (or uvicorn on port 8001).`
       );
@@ -429,11 +474,11 @@ export default function HomePage() {
           <div>
             <div className="enterprise-topbar__title">DocuMind</div>
             <div className="enterprise-topbar__subtitle">
-              Public-corpus operator console · Chroma · Ollama · FastAPI
+              Public index · FastAPI · Ollama · Chroma · UI v{DASHBOARD_UI_VERSION}
               {libraries ? (
                 <span className="enterprise-topbar__default-lib">
                   {" "}
-                  · queries use <strong>public</strong> index · legacy papers collection:{" "}
+                  · Console queries <strong>public</strong> · Papers index:{" "}
                   <strong>{libraries.papers.total_chunks.toLocaleString()}</strong> vectors
                 </span>
               ) : null}
@@ -469,6 +514,14 @@ export default function HomePage() {
               <span className="status-dot" /> {indexedPapers} docs · {indexedChunks.toLocaleString()} chunks
             </span>
           )}
+          {diagnostics ? (
+            <span
+              className="status-chip status-chip--neutral status-chip--stat"
+              title={`Process started ${diagnostics.process_started_at_utc || "—"} (UTC). GET /api/v1/diagnostics`}
+            >
+              <span className="status-dot" /> API v{diagnostics.api_version} · up {formatUptime(diagnostics.uptime_seconds)}
+            </span>
+          ) : null}
           <span className="enterprise-topbar__sync">Synced {syncLabel}</span>
         </div>
         <div className="enterprise-topbar__links">
@@ -479,29 +532,16 @@ export default function HomePage() {
         </div>
       </header>
 
-      <div className="demo-trust-bar" role="list" aria-label="Capabilities">
-        <span className="demo-trust-bar__item" role="listitem">
-          Answers cite retrieved chunks
-        </span>
-        <span className="demo-trust-bar__item" role="listitem">
-          Runs on localhost by default
-        </span>
-        <span className="demo-trust-bar__item" role="listitem">
-          Five retrieval modes (same API; tuned prompts)
-        </span>
-        <span className="demo-trust-bar__item" role="listitem">
-          Ingest plain text, PDF, or Word into the public collection
-        </span>
-        <span className="demo-trust-bar__item" role="listitem">
-          Live dual-index snapshot via /api/v1/libraries
-        </span>
-      </div>
+      <p className="app-context-line">
+        Same REST surface as integrations: <code>/health</code>, <code>/api/v1/diagnostics</code>,{" "}
+        <code>/api/v1/libraries</code>, <code>/api/v1/query</code>.
+      </p>
 
       <main className="layout">
         <aside className="sidebar">
-          <h1 className="sidebar-title">Control plane</h1>
+          <h1 className="sidebar-title">Status</h1>
           <p className="sidebar-tagline">
-            Same data the UI uses: <code>/health</code>, <code>/api/v1/libraries</code>, and{" "}
+            <code>/health</code>, <code>/api/v1/diagnostics</code>, <code>/api/v1/libraries</code>,{" "}
             <code>/api/v1/papers?library=public</code>. Refresh after bulk index or ingest.
           </p>
           <p className="pill">Ollama · Chroma · FastAPI</p>
@@ -514,6 +554,100 @@ export default function HomePage() {
               </p>
               <p className="sidebar-metric">LLM · {health?.llm_model ?? "—"}</p>
               <p className="sidebar-metric">Embed · {health?.embedding_model ?? "—"}</p>
+            </div>
+            <div className="card card--inset">
+              <strong className="sidebar-card-label">Diagnostics</strong>
+              {diagnostics ? (
+                <>
+                  <p className="sidebar-metric">
+                    <strong>Runtime</strong> · {diagnostics.app_env} · {diagnostics.python_version}
+                  </p>
+                  {diagnostics.git_sha ? (
+                    <p className="sidebar-metric">
+                      <strong>Build</strong> · <code className="topbar-code">{diagnostics.git_sha}</code>
+                    </p>
+                  ) : null}
+                  <p className="sidebar-metric">
+                    <strong>Chroma volume</strong> ·{" "}
+                    <code className="topbar-code">{diagnostics.chroma_persist_basename}</code>
+                    {diagnostics.openapi_disabled ? (
+                      <>
+                        {" "}
+                        · OpenAPI off
+                      </>
+                    ) : null}
+                  </p>
+                  <div className="diagnostics-kv">
+                    <span>Default library</span>
+                    <code>{diagnostics.default_library}</code>
+                  </div>
+                  <div className="diagnostics-kv">
+                    <span>Sample bundle ver</span>
+                    <code>{diagnostics.sample_corpus_version}</code>
+                  </div>
+                  <div className="diagnostics-kv">
+                    <span>Chunk / overlap</span>
+                    <code>
+                      {diagnostics.chunk_size} / {diagnostics.chunk_overlap}
+                    </code>
+                  </div>
+                  <div className="diagnostics-kv">
+                    <span>Default top_k (settings)</span>
+                    <code>{diagnostics.top_k_default}</code>
+                  </div>
+                  <details className="diag-details">
+                    <summary>Retrieval thresholds (live)</summary>
+                    <div className="diagnostics-kv">
+                      <span>Public cosine gate</span>
+                      <code>{diagnostics.public_relevance_threshold}</code>
+                    </div>
+                    <div className="diagnostics-kv">
+                      <span>Public keyword W</span>
+                      <code>{diagnostics.public_keyword_rerank_weight}</code>
+                    </div>
+                    <div className="diagnostics-kv">
+                      <span>Papers cosine gate</span>
+                      <code>{diagnostics.relevance_threshold_papers}</code>
+                    </div>
+                    <div className="diagnostics-kv">
+                      <span>Papers keyword W</span>
+                      <code>{diagnostics.keyword_rerank_weight_papers}</code>
+                    </div>
+                    <div className="diagnostics-kv">
+                      <span>Fallback retrieval</span>
+                      <code>{diagnostics.enable_fallback_retrieval ? "on" : "off"}</code>
+                    </div>
+                    <div className="diagnostics-kv">
+                      <span>FLARE default (env)</span>
+                      <code>{diagnostics.flare_active_retrieval_default ? "on" : "off"}</code>
+                    </div>
+                  </details>
+                  <details className="diag-details">
+                    <summary>Index counts (diagnostics echo)</summary>
+                    <div className="diagnostics-kv">
+                      <span>Public docs / vectors</span>
+                      <code>
+                        {diagnostics.public_docs.toLocaleString()} / {diagnostics.public_chunks.toLocaleString()}
+                      </code>
+                    </div>
+                    <div className="diagnostics-kv">
+                      <span>Papers docs / vectors</span>
+                      <code>
+                        {diagnostics.papers_docs.toLocaleString()} / {diagnostics.papers_chunks.toLocaleString()}
+                      </code>
+                    </div>
+                  </details>
+                  {diagnostics.seed_sample_docs ? (
+                    <p className="sidebar-status">
+                      SEED_SAMPLE_DOCS=true: bundled papers may be indexing at startup.
+                    </p>
+                  ) : null}
+                </>
+              ) : (
+                <p className="sidebar-metric" style={{ color: "var(--text-muted)" }}>
+                  {apiHealthy ? "Diagnostics loading…" : "Unavailable until API connects."}
+                </p>
+              )}
             </div>
             <div className="card card--inset sidebar-indices">
               <strong className="sidebar-card-label">Vector indices</strong>
@@ -543,10 +677,10 @@ export default function HomePage() {
               )}
             </div>
             <p className="corpus-raw-note">
-              <strong>Indexed vs raw.</strong> This UI lists vectors in Chroma (above + library cards). Offline
-              Wikipedia <code>.txt</code> shards under <code>data/wiki_txt_build/</code> are not enumerated here — at
-              scale that would freeze the browser. Run <code>scripts/bulk_index_public.py</code> with a checkpoint to
-              sync disk → public collection; use <code>/api/v1/libraries</code> for truth.
+              <strong>Indexed vs raw.</strong> Cards reflect Chroma only. Large <code>.txt</code> trees under{" "}
+              <code>data/wiki_txt_build/</code> are not listed here. Sync with{" "}
+              <code>scripts/bulk_index_public.py</code> (checkpointed); verify counts with{" "}
+              <code>/api/v1/libraries</code>.
             </p>
             <button type="button" className="btn-ghost" onClick={() => void refresh()}>
               Refresh status
@@ -558,12 +692,12 @@ export default function HomePage() {
           <div className="card card--hero">
             <div className="card-hero-head">
               <div>
-                <h2 className="card-hero-title">Wikipedia-scale public retrieval</h2>
+                <h2 className="card-hero-title">Public corpus retrieval</h2>
                 <p className="card-hero-lead">
-                  Operator UI targets the <strong>public</strong> Chroma collection: bulk path{" "}
-                  <code>scripts/bulk_index_public.py</code>, checkpoint resume, and <code>/api/v1/libraries</code> for
-                  ground truth. Modes change retrieval budget and prompt shape; answers are Markdown with citations and
-                  optional FLARE-style second pass.
+                  Queries use the <strong>public</strong> collection. Bulk indexing:{" "}
+                  <code>scripts/bulk_index_public.py</code> (checkpointed). Counts: <code>/api/v1/libraries</code>.
+                  Modes change retrieval budget and prompts; responses are Markdown with sources; optional second
+                  retrieval pass when enabled.
                 </p>
               </div>
               <span className="kbd-hint" title="Submit from the question field">
@@ -586,8 +720,8 @@ export default function HomePage() {
                     <div className="hero-metric__label">Retrieval modes</div>
                   </div>
                   <p className="hero-metrics-foot">
-                    Primary collection <strong>{libraries.public.collection_name}</strong> · papers index retained for
-                    API compatibility — not used by this console
+                    Collection <strong>{libraries.public.collection_name}</strong> · Papers collection remains on the API
+                    for non-console clients
                   </p>
                 </>
               ) : (
@@ -619,11 +753,11 @@ export default function HomePage() {
             {loading && <div className="loading-strip" aria-hidden />}
 
             <div className="card card--inset showcase-section">
-              <span className="section-eyebrow">Operator prompts</span>
-              <strong>Public corpus scenarios</strong>
+              <span className="section-eyebrow">Presets</span>
+              <strong>Scenario queries</strong>
               <p className="showcase-section__intro">
-                Each card loads a long-form prompt, mode, and Top K tuned for encyclopedia-scale retrieval. Queries
-                always hit the <strong>public</strong> index. Use Run query or Submit.
+                Each card sets prompt, mode, and Top K. All requests use <code>library=public</code>. Run query or
+                Submit.
               </p>
               <div className="showcase-grid">
                 {SHOWCASE_SCENARIOS.map((s, idx) => (
@@ -799,10 +933,9 @@ export default function HomePage() {
           </div>
 
         <div className="card">
-          <h2 className="card-h2">Ingest into public index</h2>
+          <h2 className="card-h2">Ingest (public)</h2>
           <p style={{ color: "var(--text-muted)", fontSize: 14, marginTop: 0 }}>
-            Small files only — for Wikipedia-scale loads use <code>scripts/bulk_index_public.py</code> with a
-            checkpoint.
+            Small files only. Large corpora: <code>scripts/bulk_index_public.py</code> with a checkpoint.
           </p>
           <label htmlFor="ingest-files" className="visually-hidden">
             Choose PDF, Word, or text files to index

@@ -17,6 +17,7 @@ from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from app.config import get_settings
 from app.logging_config import configure_logging
+from app.runtime_info import mark_process_started
 from app.models.response_models import CollectionStats, HealthResponse, LivenessResponse, ReadinessResponse
 from app.services.document_service import DocumentService
 from app.services.embedding_registry import EmbeddingRegistry
@@ -186,6 +187,7 @@ async def lifespan(_: FastAPI):
             seed_sample_docs(embedding_registry)
         except Exception as exc:
             logger.warning("Failed to seed sample docs: %s", exc)
+    mark_process_started()
     yield
     logger.info("DocuMind shutting down")
 
@@ -196,7 +198,7 @@ _redoc_url = None if settings.DISABLE_OPENAPI else "/redoc"
 
 app = FastAPI(
     title="DocuMind",
-    description="Production-style local RAG — dual-index (public Wikipedia-scale + research papers), Ollama embeddings/LLM.",
+    description="Dual-index RAG API (public + papers). Ollama for embeddings and chat by default.",
     version="1.1.0",
     lifespan=lifespan,
     openapi_url=_openapi_url,
@@ -309,10 +311,11 @@ def get_papers_embedding_service(
     return registry.papers
 
 
-from app.routers import arxiv, ingest, papers, query  # noqa: E402
+from app.routers import arxiv, diagnostics, ingest, papers, query  # noqa: E402
 
 app.include_router(ingest.router, prefix="/api/v1", tags=["Ingest"])
 app.include_router(query.router, prefix="/api/v1", tags=["Query"])
+app.include_router(diagnostics.router, prefix="/api/v1", tags=["Diagnostics"])
 app.include_router(arxiv.router, prefix="/api/v1", tags=["ArXiv"])
 app.include_router(papers.router, prefix="/api/v1", tags=["Papers"])
 
@@ -375,4 +378,5 @@ async def root() -> dict:
         "health_ready": "/health/ready",
         "libraries": {"public": settings.CHROMA_COLLECTION_PUBLIC, "papers": settings.CHROMA_COLLECTION_NAME},
         "default_library": settings.DEFAULT_LIBRARY,
+        "diagnostics": "/api/v1/diagnostics",
     }

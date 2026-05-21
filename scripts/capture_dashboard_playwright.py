@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-Drive the Next.js dashboard: wait until the API reports enough indexed documents, run an operator
-scenario query on the public index, wait until the synthesis body is non-trivial, then write a PNG.
+Drive the Next.js dashboard: wait until the API reports enough indexed documents, run a scenario
+query on the public index, wait until the synthesis body is non-trivial, then write a PNG.
 
 Viewport capture uses a fixed height cap (default 3200px) and scrolls the synthesis panel into view.
 Never trust documentElement.scrollHeight for screenshots — long Markdown answers can exceed 90kpx and

@@ -7,8 +7,8 @@ Contract tiers (single source of truth for pytest + scripts/run_query_eval.py):
 - full: golden expectations (has_answer, source counts, answer_substrings) — requires a corpus
   aligned with the case definitions (seed_eval_corpus in CI; or a pinned eval library in prod).
 
-Interview hooks encoded here: compare-mode retrieval collapse, section filters, FLARE second pass,
-injection-shaped queries, long-query caps, diversity-forcing compare cases.
+Technical coverage: compare-mode context, section filters, FLARE second pass, injection-shaped
+queries, long-query caps, diversity-forcing compare cases.
 """
 from __future__ import annotations
 
@@ -261,6 +261,8 @@ def metrics_from_response(status: int, body: dict[str, Any], elapsed_ms: float) 
         "answer_chars": len((body.get("answer") or "")),
         "flare_enabled": body.get("flare_enabled"),
         "flare_followup": body.get("flare_followup_retrieval"),
+        "retrieval_strategy": body.get("retrieval_strategy"),
+        "retrieval_passes": body.get("retrieval_passes"),
         "query_mode": body.get("query_mode"),
         "library": body.get("library"),
     }

@@ -1,4 +1,4 @@
-"""Contract: default operator showcase query validates against QueryRequest (sync with web/app/page.tsx)."""
+"""Contract: baseline showcase query matches QueryRequest (sync with web/app/page.tsx)."""
 
 from __future__ import annotations
 

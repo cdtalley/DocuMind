@@ -4,12 +4,9 @@ import streamlit as st
 API_BASE_URL = "http://127.0.0.1:8001"
 LIBRARY = "public"
 
-st.set_page_config(page_title="DocuMind · Public corpus", page_icon="📚", layout="wide")
-st.title("DocuMind — public index")
-st.caption(
-    "Streamlit mirror of the operator path: queries and ingest target the **public** Chroma collection only. "
-    "Bulk Wikipedia-scale loads: `scripts/bulk_index_public.py`."
-)
+st.set_page_config(page_title="DocuMind", layout="wide")
+st.title("DocuMind")
+st.caption("Streamlit client: public index only. Same REST API as the Next.js UI. Bulk jobs: scripts/bulk_index_public.py.")
 
 if "chat_history" not in st.session_state:
     st.session_state.chat_history = []

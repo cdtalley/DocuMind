@@ -1,8 +1,8 @@
 # DocuMind — Technical Reference
 
-DocuMind is a **local-first retrieval-augmented generation (RAG)** system with **two Chroma collections**: a **public** index (default; Wikipedia-scale text via offline bulk jobs) and a **papers** index (PDFs, DOCX, `.txt`, arXiv). Documents are **ingested**, **chunked**, **embedded** into **ChromaDB** (cosine space), and **queried** through **FastAPI** with a per-request **`library`** field. Answers are **grounded** on retrieved passages, returned with **structured citations**, and shaped by **mode-specific** (and library-aware) generation policies. Default **LLM and embedding inference** run via **Ollama** on operator-controlled hardware.
+DocuMind is a **local-first RAG** stack: two Chroma collections (**public** default, **papers** for PDFs/DOCX/text/arXiv), FastAPI with per-request `library`, chunking and cosine retrieval, and citations in responses. Inference defaults to **Ollama** on your hardware. Bulk public text is indexed offline; the web UI is a status and query client over the same REST API.
 
-This document specifies **architecture**, **control flows**, **configuration**, and **operational behavior** sufficient for engineering review, extension, and production hardening.
+This document covers **architecture**, **configuration**, **API behavior**, and **deployment** for handoff and extension.
 
 ---
 
@@ -26,8 +26,8 @@ This document specifies **architecture**, **control flows**, **configuration**, 
 16. [Known limitations and extension points](#16-known-limitations-and-extension-points)  
 17. [Portfolio artifacts](#17-portfolio-artifacts)  
 18. [References](#18-references)  
-19. [Interview narrative: quality bar, challenges, and retrieval design](#19-interview-narrative-quality-bar-challenges-and-retrieval-design)  
-20. [Scale operations playbook (hiring + ops)](docs/SCALE_OPERATIONS_PLAYBOOK.md)
+19. [Delivery scope, limits, and scale](#19-delivery-scope-limits-and-scale)  
+20. [Scale runbook (capacity + cloud migration)](docs/SCALE_OPERATIONS_PLAYBOOK.md) — §9 cloud stages and service mapping.
 
 ---
 
@@ -35,7 +35,7 @@ This document specifies **architecture**, **control flows**, **configuration**, 
 
 | Layer | Responsibility |
 |-------|------------------|
-| **Presentation** | Next.js 15 dashboard (`web/`) for operator workflows; optional Streamlit (`frontend/app.py`) calling the same REST API. |
+| **Presentation** | Next.js 15 (`web/`): status, diagnostics, and query UI against the REST API. Optional Streamlit (`frontend/app.py`). |
 | **Application** | FastAPI application (`app/main.py`): routing, middleware, dependency injection, lifespan-managed singletons. |
 | **Domain services** | Document parsing and chunking (`app/services/document_service.py`, `app/utils/chunker.py`); vector persistence (`app/services/embedding_service.py`); RAG orchestration (`app/services/rag_service.py`). |
 | **Model I/O** | Ollama client (`app/utils/ollama_client.py`): chat completions and per-text embeddings over HTTP. |
@@ -76,7 +76,7 @@ This document specifies **architecture**, **control flows**, **configuration**, 
 | `tests/` | API and unit tests; `tests/conftest.py` uses dependency overrides and fake embedding/RAG for isolation. |
 | `evaluation/` | Optional regression fixtures for pipeline shape. |
 | `scripts/` | Corpus generators, portfolio PDF, arXiv bulk helpers. |
-| `web/` | Next.js operator UI. |
+| `web/` | Next.js client for the API. |
 | `Dockerfile` / `docker-compose.yml` | Container image (Python 3.11-slim, non-root) and Compose stack with Chroma volume + healthcheck. |
 
 ---
@@ -208,11 +208,11 @@ Full **FLARE** ([Jiang et al., arXiv:2305.06983](https://arxiv.org/abs/2305.0698
 |----------|------|--------------------------------|
 | **Token-level FLARE** (paper-faithful) | Use per-token confidence from the generator to trigger retrieval mid-stream. | **Ollama’s `/api/chat` does not expose logprobs**; wiring OpenAI logprobs would fork the inference abstraction. |
 | **HyDE** | LLM hallucinates a hypothetical document; embed that for retrieval. | Extra latency + **hallucinated retrieval queries** can pollute dense search on technical corpora unless heavily guarded. |
-| **Multi-query / RAG-Fusion** | LLM emits several sub-queries; retrieve per query; fuse (RRF). | Strong for recall; **cost and latency scale with query count**; harder to explain citations per sub-query in a portfolio UI. |
+| **Multi-query / RAG-Fusion** | LLM emits several sub-queries; retrieve per query; fuse (RRF). | Strong for recall; **cost and latency scale with query count**; harder to attribute citations per sub-query in client UIs. |
 | **Self-RAG / CRAG** | Model judges “is retrieval needed?” and quality of hits; may rewrite queries. | Heavier **orchestration and eval surface**; many steps for a local single-GPU demo. |
 | **Re-ranker only** (cross-encoder) | Keep one retrieval pass; rerank with a second model. | Excellent production pattern; **not bundled** to keep the stack Ollama-centric and CPU-light for reviewers cloning cold. |
 
-**Why FLARE-shaped active retrieval anyway:** It is **literature-grounded** (easy to cite Jiang et al. in interviews), **bounded** (one draft call + at most one follow-up search), and **honest about constraints** (draft uses `???` / hedges instead of fake logprobs). It demonstrates you understand **when to stop retrieving** and how to **merge evidence** from two passes—without pretending the host is a commercial API.
+**Why FLARE-shaped active retrieval anyway:** It is **literature-grounded** (Jiang et al.), **bounded** (one draft call + at most one follow-up search), and explicit about **constraints** (draft uses `???` / hedges instead of logprobs). It bounds when to retrieve again and how to merge two passes without assuming a commercial host API.
 
 ---
 
@@ -224,6 +224,7 @@ Full **FLARE** ([Jiang et al., arXiv:2305.06983](https://arxiv.org/abs/2305.0698
 | GET | `/health/live` | — | Process liveness. |
 | GET | `/health/ready` | — | **503** if dependencies not ready. |
 | GET | `/api/v1/libraries` | — | **Both** collections’ `CollectionStats` + `default_library` (ops / capacity). |
+| GET | `/api/v1/diagnostics` | — | **Operator snapshot:** API version, uptime, Python, active retrieval thresholds/weights, chunk defaults, both index counts, `DOCMIND_GIT_SHA` if set. |
 | POST | `/api/v1/ingest` | `multipart/form-data`: `file`, optional `library` | Indexes into **public** or **papers**. |
 | DELETE | `/api/v1/ingest/{doc_id}` | Query `?library=` (default `public`) | **404** if no chunks. |
 | POST | `/api/v1/fetch-arxiv` | `{ "arxiv_id": "..." }` | Downloads PDF; indexes **papers** only. |
@@ -301,7 +302,7 @@ Applied in `app/main.py` (order matters for FastAPI / Starlette):
 | `data/sample_docs/*.txt` | Git | **463** files total (**400** synthetic `sample_corpus_p7_*.txt`, **63** other curated/hand files). See [`data/sample_docs/README.md`](data/sample_docs/README.md). |
 | Chunk rows for that bundle | Chroma **papers** only if `SEED_SAMPLE_DOCS=true` | **Not in git** — derived at index time from `CHUNK_SIZE` / overlap and text length (order of magnitude: low thousands to ~10k+ for the full bundle). |
 | CI / pytest “corpus” | `tests/ranking_fake_embedding.py` | **6** synthetic `doc_id`s / **6** chunks — deterministic regression only. |
-| Wikipedia-scale public text | Operator disk + `CHROMA_COLLECTION_PUBLIC` | **Millions** of articles possible via HF streaming; credible production RAG scale story (CC BY-SA — plan attribution if you redistribute). |
+| Large public text | Disk + `CHROMA_COLLECTION_PUBLIC` | HF streaming scripts; bulk embed with checkpoint; respect CC BY-SA if you redistribute. |
 
 **Strategic default:** **`library=public`** and **offline bulk index** are the flagship path; the DS `sample_docs` bundle is **legacy / optional demo** for the papers collection.
 
@@ -310,7 +311,7 @@ Applied in `app/main.py` (order matters for FastAPI / Starlette):
 - **`data/sample_docs/`** — See table above and folder README. Optional demo material for **papers** when `SEED_SAMPLE_DOCS=true` (discouraged for Wikipedia-first deployments).  
 - **Chroma in the repo clone** — Often **tens of MB** after local indexing; size grows with **chunk count × (vectors + stored text + HNSW)**. Empty **public** collection adds negligible disk until you bulk-index.
 
-### Making the **public** corpus massive (operator job)
+### Growing the public corpus
 
 1. **`pip install datasets`** (for Hugging Face streaming).  
 2. **One command (stream + bulk index):**  
@@ -384,34 +385,38 @@ Or directly: `.\.venv\Scripts\python scripts\capture_dashboard_playwright.py --h
 
 ---
 
-## 19. Interview narrative: quality bar, challenges, and retrieval design
+## 19. Delivery scope, limits, and scale
 
-### What this repo actually proves
+### Cloud and larger deployments
 
-- **Senior IC–level system design:** dual corpora (`library` routing), explicit provenance on chunks, **live vs ready** health, optional API key, structured errors with `request_id`, Docker + Compose, regression tests that **do not** require GPU clusters in CI.  
-- **RAG depth beyond “call OpenAI”:** retrieval budget by mode, keyword rerank, diversity cap, fallback when the strict distance filter starves, optional **second retrieval pass** with merge semantics, deterministic `datasets` mode for grounded extraction without generative drift.
+For staged migration (compute split, managed inference, job-based ingest, vector tier, rate limits), use **[playbook §9](docs/SCALE_OPERATIONS_PLAYBOOK.md#9-cloud-production-migration-ladder)**.
 
-### Where it is *not* “FAANG production” (say this confidently)
+### In scope (this repository)
 
-- **Single-tenant / no row-level ACL**, no SSO, no rate limiting or quota service, no multi-region active-active.  
-- **Ollama-centric** inference: great for reproducible demos; production would likely pin **vendor APIs** or **vLLM** behind autoscaling with SLO dashboards.  
-- **Chroma embedded SQLite** on disk: fine for many products; hyperscale teams often move vectors to **managed** stores (e.g. Pinecone, Weaviate Cloud, Aurora pgvector) with backup/restore runbooks.  
-- **CI does not run** full embedding + LLM golden paths—by design for cost; **live** `scripts/run_query_eval.py` is the operator’s integration check.
+- Dual corpora with explicit `library` routing; shared Chroma client, two collections; grounded answers with source list and distances.  
+- Health: `/health`, `/health/live`, `/health/ready`; ops: `/api/v1/libraries`, `/api/v1/diagnostics`.  
+- Retrieval: mode-specific budgets, keyword rerank, distance cutoffs (separate for public vs papers), optional second retrieval pass (FLARE-shaped), structured `datasets` extraction path.  
+- Tests: `pytest` with fakes for CI; optional live checks via `scripts/run_query_eval.py`.
 
-### Challenges you can talk through (STAR-friendly)
+### Out of scope (state explicitly in SOWs)
 
-1. **Dual library without doubling connections** — Two logical indexes, one `PersistentClient`, two collections; avoids subtle SQLite / Rust binding issues from opening the same path twice.  
-2. **Chroma 1.x + legacy on-disk stores** — Upstream issues (e.g. chroma-core/chroma#5909) can surface as **Rust panics**; development path **quarantines** the directory and **forces a restart** so the interpreter is not left with poisoned native bindings after PyO3 failure.  
-3. **Active retrieval without logprobs** — Full FLARE is token-conditional; this stack uses a **draft + lexical/regex uncertainty gate** (`flare_triggers_follow_up`) so behavior stays testable and bounded.  
-4. **Evaluating RAG without flaky LLM output in CI** — `tests/test_rag_query_suite.py` uses a **deterministic stub** for chat and a ranking-aware fake embedding layer so structural expectations stay stable.
+- Per-tenant ACLs, SSO, billing, multi-region HA, managed vector SaaS (swap behind the same service boundaries is a separate project).  
+- Full LLM+embed golden tests in CI (cost); run against a live stack when needed.
 
-### Sound-bites for “why not only FLARE / what else did you consider?”
+### Notable engineering choices
 
-Point to [§8.1](#81-alternatives-considered-and-why-this-flare-shaped-path): HyDE, multi-query fusion, rerank-only, self-RAG/CRAG vs **bounded FLARE-shaped** retrieval under **local API constraints**.
+1. **One `PersistentClient`, two collections** — avoids double-opening the same SQLite path.  
+2. **Chroma disk failures** — dev quarantine + process restart path; production needs backup/restore runbooks.  
+3. **FLARE without logprobs** — follow-up retrieval is gated on draft heuristics (`rag_service`), bounded and testable.  
+4. **CI RAG tests** — deterministic chat stub and ranking-aware fake embeddings in `tests/test_rag_query_suite.py`.
 
-### If you want this to read even more “hire me” in the next iteration
+### Alternatives (design context)
 
-Prioritize a **short design doc PR**: cross-encoder rerank behind a flag, **OpenTelemetry** spans on retrieve vs generate, **Ragas** or similar on a frozen eval JSONL, and a **one-page SLO table** (p95 latency, error budget). Those are high signal per line of code for staff+ loops.
+See [§8.1](#81-alternatives-considered-and-why-this-flare-shaped-path): HyDE, multi-query fusion, cross-encoder rerank-only, self-RAG/CRAG vs the bounded second-pass path used here.
+
+### Extensions that typically ship next
+
+Cross-encoder rerank (feature-flagged), OpenTelemetry on retrieve vs generate, frozen eval JSONL per release, SLO table (p95 / error budget). Same playbook §9 for cloud hardening sequence.
 
 ---
 

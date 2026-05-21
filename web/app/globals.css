@@ -385,6 +385,59 @@ body {
   font-family: ui-monospace, monospace;
 }
 
+.diagnostics-kv {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 0.78rem;
+  margin: 5px 0;
+  color: #cbd5e1;
+}
+
+.diagnostics-kv span:first-child {
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+
+.diagnostics-kv code {
+  font-size: 0.72rem;
+  color: #e2e8f0;
+  word-break: break-all;
+  text-align: right;
+}
+
+.diag-details {
+  margin-top: 10px;
+  border-top: 1px solid var(--border-subtle);
+  padding-top: 10px;
+}
+
+.diag-details summary {
+  cursor: pointer;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--accent);
+  user-select: none;
+}
+
+.diag-details[open] summary {
+  margin-bottom: 8px;
+}
+
+.app-context-line {
+  margin: 0;
+  padding: 10px 32px 14px;
+  font-size: 0.8125rem;
+  color: var(--text-muted);
+  border-bottom: 1px solid var(--border-subtle);
+  background: rgba(15, 23, 42, 0.45);
+}
+
+.app-context-line code {
+  font-size: 0.75rem;
+  color: #cbd5e1;
+}
+
 .content {
   padding: 32px 32px 56px;
   max-width: 1280px;

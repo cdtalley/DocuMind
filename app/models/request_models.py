@@ -4,6 +4,8 @@ from pydantic import BaseModel, Field, field_validator
 
 from app.models.library import LibraryId
 
+RetrievalStrategy = Literal["baseline", "flare", "hyde", "multi_query"]
+
 SectionFilter = Literal[
     "abstract",
     "introduction",
@@ -34,10 +36,21 @@ class QueryRequest(BaseModel):
     use_flare: bool = Field(
         default=False,
         description=(
-            "If true (or FLARE_ACTIVE_RETRIEVAL in settings), run FLARE-inspired active retrieval: "
-            "a short forward-looking draft may trigger a second embedding search, then merge chunks before generation. "
-            "Ignored for datasets mode."
+            "Legacy toggle: when true and retrieval_strategy is baseline, selects flare. "
+            "Prefer retrieval_strategy=flare for new clients."
         ),
+    )
+    retrieval_strategy: RetrievalStrategy = Field(
+        default="baseline",
+        description=(
+            "Retrieval path before answer synthesis: baseline (single dense pass), flare (draft + optional 2nd pass), "
+            "hyde (hypothetical passage embedding), multi_query (LLM sub-queries + RRF fusion). "
+            "Ignored for datasets mode (always baseline extraction)."
+        ),
+    )
+    retrieve_only: bool = Field(
+        default=False,
+        description="If true, return retrieved sources without final answer LLM synthesis (retrieval ablation).",
     )
 
     @field_validator("query", mode="before")

@@ -15,9 +15,9 @@ const outfit = Outfit({
 });
 
 export const metadata: Metadata = {
-  title: "DocuMind · Public corpus operator console",
+  title: "DocuMind",
   description:
-    "Wikipedia-scale public index: live Chroma stats via /api/v1/libraries, five query modes, grounded Markdown synthesis with citations, optional FLARE-style second retrieval. FastAPI + Ollama."
+    "RAG web client and API: Chroma-backed retrieval, FastAPI, optional second-pass retrieval. Public index default."
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

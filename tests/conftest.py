@@ -11,6 +11,7 @@ from app.main import app, get_document_service, get_embedding_registry, get_olla
 from app.models.library import LibraryId
 from app.models.response_models import AnswerResponse
 from app.services.document_service import DocumentService
+from app.services.rag_service import RAGService
 from app.utils.chunker import DocumentChunker
 
 
@@ -76,6 +77,8 @@ class FakeRagService:
         query_mode: str = "general",
         section_filter: str | None = None,
         use_flare: bool = False,
+        retrieval_strategy: str = "baseline",
+        retrieve_only: bool = False,
     ):
         results = self.embedding_service.search(query, top_k, section_filter)
         if not results:
@@ -90,6 +93,8 @@ class FakeRagService:
                 chunks_searched=0,
                 flare_enabled=use_flare,
                 flare_followup_retrieval=False,
+                retrieval_strategy=retrieval_strategy,
+                retrieval_passes=1,
                 library="public",
             )
         first = results[0]
@@ -104,6 +109,8 @@ class FakeRagService:
             chunks_searched=len(results),
             flare_enabled=use_flare,
             flare_followup_retrieval=False,
+            retrieval_strategy=retrieval_strategy,
+            retrieval_passes=1,
             library="public",
         )
 

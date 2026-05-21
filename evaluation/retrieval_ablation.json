@@ -1,0 +1,55 @@
+{
+  "version": "1",
+  "description": "Curated probes for retrieval-strategy ablation (baseline vs flare vs hyde vs multi_query). Use with library=public on an indexed corpus.",
+  "library": "public",
+  "cases": [
+    {
+      "id": "A01",
+      "query": "Summarize the main topics covered in the indexed articles. Cite **Article title** for each theme.",
+      "query_mode": "general",
+      "top_k": 10
+    },
+    {
+      "id": "A02",
+      "query": "Compare how two or more articles describe a shared theme. Use a markdown table: Theme | **Article title** | Detail | Limitation.",
+      "query_mode": "compare",
+      "top_k": 14
+    },
+    {
+      "id": "A03",
+      "query": "What scientific or technical concepts appear in the retrieved passages? One sentence each with **Article title**.",
+      "query_mode": "general",
+      "top_k": 12
+    },
+    {
+      "id": "A04",
+      "query": "List dates, years, or time periods stated in the excerpts and what they refer to. Include **Article title** per bullet.",
+      "query_mode": "methodology",
+      "top_k": 10
+    },
+    {
+      "id": "A05",
+      "query": "What geographical locations (cities, countries, regions) are mentioned? Bullet list with **Article title**.",
+      "query_mode": "general",
+      "top_k": 12
+    },
+    {
+      "id": "A06",
+      "query": "Do any passages disagree on the same topic? Summarize neutrally with **Article title**, or state they align.",
+      "query_mode": "compare",
+      "top_k": 14
+    },
+    {
+      "id": "A07",
+      "query": "Extract numerical facts from the context only. Table: Value | What it refers to | **Article title**.",
+      "query_mode": "general",
+      "top_k": 12
+    },
+    {
+      "id": "A08",
+      "query": "If passages describe a process or workflow, outline steps as a checklist; otherwise say no process is described.",
+      "query_mode": "reproduce",
+      "top_k": 10
+    }
+  ]
+}

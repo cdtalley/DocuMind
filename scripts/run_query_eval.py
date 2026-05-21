@@ -20,9 +20,8 @@ Tiered validation (production pattern: separate corpus-agnostic checks from gold
 Outputs human-readable rows plus p50/p95 latency; optional --csv and --json-out for artifacts.
 503 from upstream gets bounded retries (transient dependency failures).
 
-Interview hooks baked into the case list: compare-mode context collapse, metadata section
-filters, FLARE second pass without logprobs, injection-shaped queries, diversity-forcing
-multi-doc compare, long-query behavior under caps.
+Case list covers: compare-mode context, section filters, FLARE second pass, injection-shaped
+queries, multi-doc diversity, long-query caps.
 
   python scripts/run_query_eval.py --base-url http://127.0.0.1:8001 --tier structural
   python scripts/run_query_eval.py --base-url http://127.0.0.1:8001 --tier full --skip-empty-corpus-cases

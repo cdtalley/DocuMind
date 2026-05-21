@@ -98,28 +98,40 @@ class ChromaEmbeddingService:
         return True
 
     def list_papers(self) -> list[dict]:
-        data = self.collection.get(include=["metadatas"])
-        metadatas = data.get("metadatas") or []
+        """List indexed documents with chunk counts. Batched to avoid Chroma/SQLite variable limits on huge corpora."""
         grouped: dict[str, dict] = {}
         counts = defaultdict(int)
-
-        for md in metadatas:
-            if not md:
-                continue
-            current_doc_id = md.get("doc_id", "")
-            if not current_doc_id:
-                continue
-            counts[current_doc_id] += 1
-            if current_doc_id not in grouped:
-                grouped[current_doc_id] = {
-                    "doc_id": current_doc_id,
-                    "filename": md.get("filename", ""),
-                    "title": md.get("title", ""),
-                    "authors": md.get("authors", ""),
-                    "year": md.get("year", ""),
-                    "arxiv_id": md.get("arxiv_id", ""),
-                    "chunk_count": 0,
-                }
+        batch_size = 2_000
+        offset = 0
+        total = self.collection.count()
+        while offset < total:
+            data = self.collection.get(
+                include=["metadatas"],
+                limit=min(batch_size, max(total - offset, 0)),
+                offset=offset,
+            )
+            ids = data.get("ids") or []
+            metadatas = data.get("metadatas") or []
+            if not ids:
+                break
+            for md in metadatas:
+                if not md:
+                    continue
+                current_doc_id = md.get("doc_id", "")
+                if not current_doc_id:
+                    continue
+                counts[current_doc_id] += 1
+                if current_doc_id not in grouped:
+                    grouped[current_doc_id] = {
+                        "doc_id": current_doc_id,
+                        "filename": md.get("filename", ""),
+                        "title": md.get("title", ""),
+                        "authors": md.get("authors", ""),
+                        "year": md.get("year", ""),
+                        "arxiv_id": md.get("arxiv_id", ""),
+                        "chunk_count": 0,
+                    }
+            offset += len(ids)
 
         for current_doc_id, count in counts.items():
             grouped[current_doc_id]["chunk_count"] = count

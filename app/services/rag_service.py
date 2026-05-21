@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import logging
 import re
+from dataclasses import dataclass
+from typing import Literal
 
 from app.models.library import LibraryId
 from app.models.response_models import AnswerResponse, SourceCitation
@@ -64,9 +66,9 @@ KNOWN_DATASET_HINTS: frozenset[str] = frozenset(
     }
 )
 
-# Shared rules: portfolio-grade depth must still be fully grounded.
+# Shared rules: depth stays grounded to retrieved text only.
 _GROUNDING = (
-    "You are DocuMind — a staff+ research synthesizer. Non-negotiable grounding:\n"
+    "You are DocuMind — a research synthesizer. Non-negotiable grounding:\n"
     "- Use ONLY the context blocks. Never invent papers, metrics, datasets, URLs, hardware, or hyperparameter values.\n"
     "- Every substantive claim needs a **Paper title** (exact from context) in the same bullet/paragraph or the adjacent one.\n"
     "- Use research-corpus vocabulary (papers, methods, benchmarks) only when the excerpts support it.\n"
@@ -225,6 +227,32 @@ def flare_triggers_follow_up(draft: str) -> bool:
     return any(p in d for p in phrases)
 
 
+RetrievalStrategyName = Literal["baseline", "flare", "hyde", "multi_query"]
+
+HYDE_SYSTEM = (
+    "Write a short hypothetical passage (120-220 words) that would appear in a reference article "
+    "and help answer the user's question. Plain prose only — no markdown, no bullet lists, no citations. "
+    "Use plausible domain vocabulary; do not invent specific statistics unless typical for the topic."
+)
+
+MULTI_QUERY_SYSTEM = (
+    "Given a user question for a document library, output exactly 3 diverse search queries "
+    "that would retrieve complementary passages. One query per line. No numbering, prefixes, or extra text."
+)
+
+RRF_K = 60
+
+
+@dataclass(frozen=True)
+class _RetrievalOutcome:
+    filtered: list[dict]
+    used_fallback: bool
+    chunks_searched: int
+    strategy: RetrievalStrategyName
+    retrieval_passes: int
+    flare_follow_up: bool
+
+
 class RAGService:
     def __init__(
         self,
@@ -328,6 +356,155 @@ class RAGService:
         return sorted(
             merged,
             key=lambda item: item["distance"] - (w * self._keyword_overlap_score(overlap_query, item["content"])),
+        )
+
+    @staticmethod
+    def _rrf_fuse_ranked_lists(ranked_lists: list[list[dict]], overlap_query: str, keyword_weight: float) -> list[dict]:
+        """Reciprocal rank fusion across multiple retrieval lists (RAG-Fusion style)."""
+        scores: dict[tuple, float] = {}
+        best_item: dict[tuple, dict] = {}
+        for rlist in ranked_lists:
+            for rank, item in enumerate(rlist, start=1):
+                key = RAGService._chunk_identity(item)
+                scores[key] = scores.get(key, 0.0) + 1.0 / (RRF_K + rank)
+                cur = best_item.get(key)
+                if cur is None or float(item["distance"]) < float(cur["distance"]):
+                    best_item[key] = item
+        merged = list(best_item.values())
+
+        def sort_key(item: dict) -> tuple:
+            key = RAGService._chunk_identity(item)
+            kw = RAGService._keyword_overlap_score(overlap_query, item["content"])
+            return (-scores.get(key, 0.0), float(item["distance"]) - keyword_weight * kw)
+
+        return sorted(merged, key=sort_key)
+
+    @staticmethod
+    def _effective_retrieval_strategy(
+        retrieval_strategy: str,
+        *,
+        use_flare: bool,
+        flare_active_default: bool,
+        query_mode: str,
+    ) -> RetrievalStrategyName:
+        if query_mode == "datasets":
+            return "baseline"
+        if retrieval_strategy != "baseline":
+            return retrieval_strategy  # type: ignore[return-value]
+        if use_flare or flare_active_default:
+            return "flare"
+        return "baseline"
+
+    def _hyde_hypothetical_passage(self, user_query: str) -> str:
+        messages = [
+            {"role": "system", "content": HYDE_SYSTEM},
+            {"role": "user", "content": f"User question:\n{user_query.strip()}\n\nHypothetical passage:"},
+        ]
+        return self.ollama_client.chat(messages, temperature=0.35).strip()
+
+    def _multi_query_variants(self, user_query: str) -> list[str]:
+        messages = [
+            {"role": "system", "content": MULTI_QUERY_SYSTEM},
+            {"role": "user", "content": user_query.strip()},
+        ]
+        raw = self.ollama_client.chat(messages, temperature=0.2).strip()
+        variants = [ln.strip() for ln in raw.splitlines() if ln.strip()]
+        seen: set[str] = {user_query.strip().lower()}
+        out = [user_query.strip()]
+        for v in variants:
+            key = v.lower()
+            if key in seen:
+                continue
+            seen.add(key)
+            out.append(v)
+            if len(out) >= 4:
+                break
+        return out
+
+    def _run_retrieval(
+        self,
+        query: str,
+        top_k: int,
+        query_mode: str,
+        section_filter: str | None,
+        strategy: RetrievalStrategyName,
+    ) -> _RetrievalOutcome:
+        overlap = query
+        flare_follow_up = False
+        passes = 1
+
+        if strategy == "hyde":
+            try:
+                hypo = self._hyde_hypothetical_passage(query)
+            except Exception as exc:
+                logger.warning("HyDE hypothetical call failed; falling back to baseline: %s", exc)
+                hypo = ""
+            embed_q = hypo if hypo else query
+            reranked = self._search_rerank(embed_q, overlap, top_k, query_mode, section_filter)
+            chunks_searched = len(reranked)
+            filtered, used_fallback = self._pick_context_from_reranked(reranked, overlap, query_mode, top_k)
+            return _RetrievalOutcome(
+                filtered=filtered,
+                used_fallback=used_fallback,
+                chunks_searched=chunks_searched,
+                strategy="hyde" if hypo else "baseline",
+                retrieval_passes=1,
+                flare_follow_up=False,
+            )
+
+        if strategy == "multi_query":
+            try:
+                sub_queries = self._multi_query_variants(query)
+            except Exception as exc:
+                logger.warning("Multi-query expansion failed; falling back to baseline: %s", exc)
+                sub_queries = [query]
+            lists = [
+                self._search_rerank(sq, overlap, top_k, query_mode, section_filter) for sq in sub_queries
+            ]
+            chunks_searched = sum(len(lst) for lst in lists)
+            w = self._keyword_rerank_weight()
+            reranked = self._rrf_fuse_ranked_lists(lists, overlap, w)
+            passes = len(sub_queries)
+            filtered, used_fallback = self._pick_context_from_reranked(reranked, overlap, query_mode, top_k)
+            return _RetrievalOutcome(
+                filtered=filtered,
+                used_fallback=used_fallback,
+                chunks_searched=chunks_searched,
+                strategy="multi_query",
+                retrieval_passes=passes,
+                flare_follow_up=False,
+            )
+
+        rer1 = self._search_rerank(query, overlap, top_k, query_mode, section_filter)
+        filtered, used_fallback = self._pick_context_from_reranked(rer1, overlap, query_mode, top_k)
+        chunks_searched = len(rer1)
+
+        if strategy == "flare" and query_mode != "datasets" and filtered:
+            mini = self._flare_mini_context(filtered)
+            if mini:
+                try:
+                    draft = self._flare_forward_looking_draft(query, mini)
+                except Exception as exc:
+                    logger.warning("FLARE draft call failed; continuing with single pass: %s", exc)
+                    draft = ""
+                if draft.strip() and flare_triggers_follow_up(draft):
+                    follow_q = (
+                        f"{query.strip()}\n\nRetrieval focus from model lookahead:\n{draft.strip()}"[:2000]
+                    )
+                    rer2 = self._search_rerank(follow_q, overlap, top_k, query_mode, section_filter)
+                    merged = self._merge_reranked_passes(rer1, rer2, overlap)
+                    filtered, used_fallback = self._pick_context_from_reranked(merged, overlap, query_mode, top_k)
+                    flare_follow_up = True
+                    chunks_searched = len(rer1) + len(rer2)
+                    passes = 2
+
+        return _RetrievalOutcome(
+            filtered=filtered,
+            used_fallback=used_fallback,
+            chunks_searched=chunks_searched,
+            strategy=strategy,
+            retrieval_passes=passes,
+            flare_follow_up=flare_follow_up,
         )
 
     def _flare_mini_context(self, filtered: list[dict]) -> str:
@@ -453,6 +630,23 @@ class RAGService:
         results.sort(key=lambda row: (row[0].lower(), row[1].lower()))
         return results
 
+    @staticmethod
+    def _sources_from_chunks(filtered: list[dict]) -> list[SourceCitation]:
+        return [
+            SourceCitation(
+                doc_id=item["metadata"].get("doc_id", ""),
+                paper_title=item["metadata"].get("title", ""),
+                authors=item["metadata"].get("authors", ""),
+                year=item["metadata"].get("year", ""),
+                section=item["metadata"].get("section", "body"),
+                page_number=int(item["metadata"].get("page_number", 0) or 0),
+                chunk_index=int(item["metadata"].get("chunk_index", 0) or 0),
+                content_preview=item["content"][:250],
+                distance=float(item["distance"]),
+            )
+            for item in filtered
+        ]
+
     def answer(
         self,
         query: str,
@@ -460,31 +654,24 @@ class RAGService:
         query_mode: str = "general",
         section_filter: str | None = None,
         use_flare: bool = False,
+        retrieval_strategy: str = "baseline",
+        retrieve_only: bool = False,
     ) -> AnswerResponse:
-        """Retrieve, optionally merge FLARE follow-up pass, then answer (or dataset inventory)."""
-        flare_on = bool(use_flare or self.settings.FLARE_ACTIVE_RETRIEVAL)
-        flare_follow_up = False
-        rer1 = self._search_rerank(query, query, top_k, query_mode, section_filter)
-        filtered, used_fallback = self._pick_context_from_reranked(rer1, query, query_mode, top_k)
-        chunks_searched = len(rer1)
-
-        if flare_on and query_mode != "datasets" and filtered:
-            mini = self._flare_mini_context(filtered)
-            if mini:
-                try:
-                    draft = self._flare_forward_looking_draft(query, mini)
-                except Exception as exc:
-                    logger.warning("FLARE draft call failed; continuing with single pass: %s", exc)
-                    draft = ""
-                if draft.strip() and flare_triggers_follow_up(draft):
-                    follow_q = (
-                        f"{query.strip()}\n\nRetrieval focus from model lookahead:\n{draft.strip()}"[:2000]
-                    )
-                    rer2 = self._search_rerank(follow_q, query, top_k, query_mode, section_filter)
-                    merged = self._merge_reranked_passes(rer1, rer2, query)
-                    filtered, used_fallback = self._pick_context_from_reranked(merged, query, query_mode, top_k)
-                    flare_follow_up = True
-                    chunks_searched = len(rer1) + len(rer2)
+        """Retrieve with the selected strategy, then answer (or dataset inventory)."""
+        strategy = self._effective_retrieval_strategy(
+            retrieval_strategy,
+            use_flare=use_flare,
+            flare_active_default=bool(self.settings.FLARE_ACTIVE_RETRIEVAL),
+            query_mode=query_mode,
+        )
+        flare_on = strategy == "flare"
+        outcome = self._run_retrieval(query, top_k, query_mode, section_filter, strategy)
+        filtered = outcome.filtered
+        used_fallback = outcome.used_fallback
+        chunks_searched = outcome.chunks_searched
+        flare_follow_up = outcome.flare_follow_up
+        strategy = outcome.strategy
+        retrieval_passes = outcome.retrieval_passes
 
         if not filtered:
             if self._content_library == "public":
@@ -508,6 +695,29 @@ class RAGService:
                 chunks_searched=chunks_searched,
                 flare_enabled=flare_on,
                 flare_followup_retrieval=flare_follow_up,
+                retrieval_strategy=strategy,
+                retrieval_passes=retrieval_passes,
+                library=self._content_library,
+            )
+
+        sources = self._sources_from_chunks(filtered)
+        confidence = round(1.0 - (sum(item["distance"] for item in filtered) / len(filtered)), 2)
+        confidence = max(0.0, min(1.0, confidence))
+
+        if retrieve_only and query_mode != "datasets":
+            return AnswerResponse(
+                answer="",
+                sources=sources,
+                confidence=confidence,
+                has_answer=True,
+                query=query,
+                query_mode=query_mode,
+                model_used=self.settings.LLM_MODEL,
+                chunks_searched=chunks_searched,
+                flare_enabled=flare_on,
+                flare_followup_retrieval=flare_follow_up,
+                retrieval_strategy=strategy,
+                retrieval_passes=retrieval_passes,
                 library=self._content_library,
             )
 
@@ -571,26 +781,10 @@ class RAGService:
         if used_fallback and query_mode != "datasets":
             answer_text = f"{answer_text}\n\n*Retrieval: using best-matching passages (strict distance threshold not met).*"
 
-        sources = [
-            SourceCitation(
-                doc_id=item["metadata"].get("doc_id", ""),
-                paper_title=item["metadata"].get("title", ""),
-                authors=item["metadata"].get("authors", ""),
-                year=item["metadata"].get("year", ""),
-                section=item["metadata"].get("section", "body"),
-                page_number=int(item["metadata"].get("page_number", 0) or 0),
-                chunk_index=int(item["metadata"].get("chunk_index", 0) or 0),
-                content_preview=item["content"][:250],
-                distance=float(item["distance"]),
-            )
-            for item in filtered
-        ]
-        confidence = round(1.0 - (sum(item["distance"] for item in filtered) / len(filtered)), 2)
-
         return AnswerResponse(
             answer=answer_text,
             sources=sources,
-            confidence=max(0.0, min(1.0, confidence)),
+            confidence=confidence,
             has_answer=True,
             query=query,
             query_mode=query_mode,
@@ -598,5 +792,7 @@ class RAGService:
             chunks_searched=chunks_searched,
             flare_enabled=flare_on,
             flare_followup_retrieval=flare_follow_up,
+            retrieval_strategy=strategy,
+            retrieval_passes=retrieval_passes,
             library=self._content_library,
         )
