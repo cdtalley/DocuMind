@@ -15,7 +15,7 @@ This document covers **architecture**, **configuration**, **API behavior**, and 
 5. [Data lifecycle: ingest → index](#5-data-lifecycle-ingest--index)  
 6. [Retrieval and generation pipeline](#6-retrieval-and-generation-pipeline)  
 7. [Query modes](#7-query-modes)  
-8. [FLARE-inspired active retrieval](#8-flare-inspired-active-retrieval)  
+8. [Retrieval strategies and ablation](#8-retrieval-strategies-and-ablation)  
 9. [HTTP API](#9-http-api)  
 10. [Configuration](#10-configuration)  
 11. [Security middleware](#11-security-middleware)  
@@ -187,32 +187,44 @@ Optional **`section_filter`** — see [§5.4](#54-sectionfilter-and-library).
 
 ---
 
-## 8. FLARE-inspired active retrieval
+## 8. Retrieval strategies and ablation
 
-**Scope:** FLARE here is **not** a substitute for RAG—it is an **optional second retrieval pass** on top of the same dense-vector RAG pipeline (retrieve → optionally retrieve again with a richer query → merge → generate). The default path is still **single-pass RAG** unless `use_flare` or `FLARE_ACTIVE_RETRIEVAL` turns this on.
+**Default:** `retrieval_strategy=baseline` — single dense-vector pass, keyword rerank, distance threshold, source diversity, then generation.
 
-Full **FLARE** ([Jiang et al., arXiv:2305.06983](https://arxiv.org/abs/2305.06983)) uses **token-level confidence** to trigger mid-generation retrieval. Ollama’s chat API used here does **not** expose per-token logprobs.
+**Request fields:** `retrieval_strategy` (`baseline` | `flare` | `hyde` | `multi_query`), legacy `use_flare` (maps to `flare` when strategy is `baseline`), and `retrieve_only` (skip final answer LLM — for benchmarks).
 
-**Implementation:** When `use_flare` (request) or `FLARE_ACTIVE_RETRIEVAL` (settings) is true and mode ≠ `datasets`:
+| Strategy | Mechanism | Extra LLM calls |
+|----------|-----------|-----------------|
+| **baseline** | Embed user query → Chroma → rerank → filter | 0 |
+| **flare** | Same first pass; forward-looking draft; second search if draft has `???` or hedges | 0–1 draft |
+| **hyde** | LLM writes hypothetical passage; **embed that** for search (Gao et al., HyDE) | 1 |
+| **multi_query** | LLM emits up to 3 sub-queries; search each; **RRF** fuse ranks | 1 |
 
-1. Run the standard first-pass retrieval → context selection.  
-2. Build a **truncated mini-context** (bounded by `FLARE_DRAFT_MAX_CONTEXT_CHARS`) from selected chunks.  
-3. Call the LLM once with `FLARE_DRAFT_SYSTEM` to produce a **2–4 sentence forward-looking draft**; unsupported facts must appear as `???` or explicit excerpt-level hedges.  
-4. If `flare_triggers_follow_up(draft)` is true, run a **second** `search` with a composite query (user question + draft excerpt, capped length).  
-5. **Merge** reranked lists by chunk identity, keeping the **better** (lower) distance per chunk; re-run threshold, fallback, and diversity on the merged set.  
-6. Final synthesis uses merged chunks. Response fields `flare_enabled` and `flare_followup_retrieval` record what occurred.
+`datasets` mode always uses baseline extraction (no strategy LLM helpers).
 
-### 8.1 Alternatives considered (and why this FLARE-shaped path)
+### 8.1 FLARE-inspired (not paper-faithful)
 
-| Approach | Idea | Why it is not the default here |
-|----------|------|--------------------------------|
-| **Token-level FLARE** (paper-faithful) | Use per-token confidence from the generator to trigger retrieval mid-stream. | **Ollama’s `/api/chat` does not expose logprobs**; wiring OpenAI logprobs would fork the inference abstraction. |
-| **HyDE** | LLM hallucinates a hypothetical document; embed that for retrieval. | Extra latency + **hallucinated retrieval queries** can pollute dense search on technical corpora unless heavily guarded. |
-| **Multi-query / RAG-Fusion** | LLM emits several sub-queries; retrieve per query; fuse (RRF). | Strong for recall; **cost and latency scale with query count**; harder to attribute citations per sub-query in client UIs. |
-| **Self-RAG / CRAG** | Model judges “is retrieval needed?” and quality of hits; may rewrite queries. | Heavier **orchestration and eval surface**; many steps for a local single-GPU demo. |
-| **Re-ranker only** (cross-encoder) | Keep one retrieval pass; rerank with a second model. | Excellent production pattern; **not bundled** to keep the stack Ollama-centric and CPU-light for reviewers cloning cold. |
+Full **FLARE** ([Jiang et al., arXiv:2305.06983](https://arxiv.org/abs/2305.06983)) triggers retrieval from **token-level confidence** during generation. Ollama chat here does **not** expose logprobs, so **flare** uses a short draft with explicit `???` / “not stated in excerpt” hedges and `flare_triggers_follow_up()` to gate a second pass.
 
-**Why FLARE-shaped active retrieval anyway:** It is **literature-grounded** (Jiang et al.), **bounded** (one draft call + at most one follow-up search), and explicit about **constraints** (draft uses `???` / hedges instead of logprobs). It bounds when to retrieve again and how to merge two passes without assuming a commercial host API.
+### 8.2 Systematic comparison (live API)
+
+```powershell
+# API + Ollama up, public corpus indexed
+.\.venv\Scripts\python scripts\run_retrieval_ablation.py --base-url http://127.0.0.1:8001 `
+  --report-md evaluation/reports/retrieval_ablation.md `
+  --csv evaluation/reports/retrieval_ablation.csv `
+  --json-out evaluation/reports/retrieval_ablation_summary.json
+```
+
+Benchmark cases: `evaluation/retrieval_ablation.json` (8 probes) or `--bench evaluation/wiki_public_bench.json`. The script prints per-strategy **grounded rate**, **latency p50/p95**, **avg unique docs**, and **Jaccard overlap vs baseline** for slide-ready Markdown.
+
+### 8.3 Other approaches (documented, not default)
+
+| Approach | Why not default in this repo |
+|----------|------------------------------|
+| Token-level FLARE | Needs logprobs from the generator host |
+| Self-RAG / CRAG | Heavy orchestration for a local demo |
+| Cross-encoder rerank | Strong in prod; kept Ollama-only for clone-friendly deploys |
 
 ---
 

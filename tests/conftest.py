@@ -80,6 +80,13 @@ class FakeRagService:
         retrieval_strategy: str = "baseline",
         retrieve_only: bool = False,
     ):
+        strategy = RAGService._effective_retrieval_strategy(
+            retrieval_strategy,
+            use_flare=use_flare,
+            flare_active_default=False,
+            query_mode=query_mode,
+        )
+        flare_on = strategy == "flare"
         results = self.embedding_service.search(query, top_k, section_filter)
         if not results:
             return AnswerResponse(
@@ -91,15 +98,16 @@ class FakeRagService:
                 query_mode=query_mode,
                 model_used="llama3",
                 chunks_searched=0,
-                flare_enabled=use_flare,
+                flare_enabled=flare_on,
                 flare_followup_retrieval=False,
-                retrieval_strategy=retrieval_strategy,
+                retrieval_strategy=strategy,
                 retrieval_passes=1,
                 library="public",
             )
         first = results[0]
+        answer = "" if retrieve_only else f"Matched content: {first['content'][:120]}"
         return AnswerResponse(
-            answer=f"Matched content: {first['content'][:120]}",
+            answer=answer,
             sources=[],
             confidence=0.9,
             has_answer=True,
@@ -107,10 +115,10 @@ class FakeRagService:
             query_mode=query_mode,
             model_used="llama3",
             chunks_searched=len(results),
-            flare_enabled=use_flare,
+            flare_enabled=flare_on,
             flare_followup_retrieval=False,
-            retrieval_strategy=retrieval_strategy,
-            retrieval_passes=1,
+            retrieval_strategy=strategy,
+            retrieval_passes=1 if strategy != "multi_query" else 3,
             library="public",
         )
 
