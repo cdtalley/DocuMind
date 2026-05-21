@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <title>DocuMind Retrieval Benchmark</title>
+  <style>
+    :root { font-family: system-ui, sans-serif; background: #0f1115; color: #e8eaed; }
+    body { margin: 0; padding: 32px 40px; max-width: 1100px; }
+    h1 { font-size: 1.75rem; font-weight: 600; margin: 0 0 8px; }
+    .sub { color: #9aa0a6; font-size: 0.9rem; margin-bottom: 28px; }
+    .grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 28px; }
+    .kpi { background: #1a1d24; border: 1px solid #2a2f3a; border-radius: 8px; padding: 16px; }
+    .kpi .n { font-size: 1.5rem; font-weight: 600; }
+    .kpi .l { color: #9aa0a6; font-size: 0.75rem; margin-top: 4px; }
+    section { margin-bottom: 32px; }
+    h2 { font-size: 1.1rem; margin: 0 0 12px; }
+    .bar-row { display: grid; grid-template-columns: 100px 1fr 48px; gap: 10px; align-items: center; margin: 8px 0; }
+    .track { background: #2a2f3a; height: 10px; border-radius: 4px; overflow: hidden; }
+    .fill { background: #4a9eff; height: 100%; }
+    .lbl, .val { font-size: 0.85rem; }
+    table { width: 100%; border-collapse: collapse; font-size: 0.82rem; }
+    th, td { border-bottom: 1px solid #2a2f3a; padding: 8px 10px; text-align: left; }
+    th { color: #9aa0a6; font-weight: 500; }
+    .note { color: #9aa0a6; font-size: 0.8rem; margin-top: 24px; }
+  </style>
+</head>
+<body>
+  <h1>DocuMind retrieval strategy benchmark</h1>
+  <p class="sub">8 test queries × 4 strategies · corpus 6 docs · offline_ranking_fake</p>
+  <div class="grid">
+    <div class="kpi"><div class="n">100%</div><div class="l">Grounded hit rate (all)</div></div>
+    <div class="kpi"><div class="n">5.2</div><div class="l">Peak avg sources</div></div>
+    <div class="kpi"><div class="n">72%</div><div class="l">Peak avg confidence</div></div>
+    <div class="kpi"><div class="n">6</div><div class="l">Baseline chunks searched</div></div>
+  </div>
+  <section>
+    <h2>Average sources retrieved</h2>
+    <div class="bar-row"><span class="lbl">baseline</span><div class="track"><div class="fill" style="width:52%"></div></div><span class="val">2.75</span></div><div class="bar-row"><span class="lbl">flare</span><div class="track"><div class="fill" style="width:69%"></div></div><span class="val">3.62</span></div><div class="bar-row"><span class="lbl">hyde</span><div class="track"><div class="fill" style="width:100%"></div></div><span class="val">5.25</span></div><div class="bar-row"><span class="lbl">multi_query</span><div class="track"><div class="fill" style="width:90%"></div></div><span class="val">4.75</span></div>
+  </section>
+  <section>
+    <h2>Overlap vs baseline (Jaccard)</h2>
+    <table><thead><tr><th>Strategy</th><th>Jaccard</th></tr></thead><tbody><tr><td>flare</td><td>57%</td></tr><tr><td>hyde</td><td>47%</td></tr><tr><td>multi_query</td><td>50%</td></tr></tbody></table>
+  </section>
+  <section>
+    <h2>Per-query scorecard</h2>
+    <table>
+      <thead><tr><th>Case</th><th>Strategy</th><th>Grounded</th><th>Sources</th><th>Docs</th><th>Conf</th><th>Chunks</th><th>ms</th><th>2nd pass</th></tr></thead>
+      <tbody><tr><td>A01</td><td>baseline</td><td>Yes</td><td>3</td><td>3</td><td>48%</td><td>6</td><td>0.34</td><td>—</td></tr><tr><td>A01</td><td>flare</td><td>Yes</td><td>2</td><td>2</td><td>51%</td><td>12</td><td>0.66</td><td>Yes</td></tr><tr><td>A01</td><td>hyde</td><td>Yes</td><td>5</td><td>5</td><td>52%</td><td>6</td><td>1.01</td><td>—</td></tr><tr><td>A01</td><td>multi_query</td><td>Yes</td><td>4</td><td>4</td><td>75%</td><td>24</td><td>1.47</td><td>—</td></tr><tr><td>A02</td><td>baseline</td><td>Yes</td><td>6</td><td>6</td><td>49%</td><td>6</td><td>0.44</td><td>—</td></tr><tr><td>A02</td><td>flare</td><td>Yes</td><td>6</td><td>6</td><td>50%</td><td>12</td><td>1.06</td><td>Yes</td></tr><tr><td>A02</td><td>hyde</td><td>Yes</td><td>6</td><td>6</td><td>51%</td><td>6</td><td>0.57</td><td>—</td></tr><tr><td>A02</td><td>multi_query</td><td>Yes</td><td>6</td><td>6</td><td>68%</td><td>24</td><td>1.88</td><td>—</td></tr><tr><td>A03</td><td>baseline</td><td>Yes</td><td>1</td><td>1</td><td>52%</td><td>6</td><td>0.42</td><td>—</td></tr><tr><td>A03</td><td>flare</td><td>Yes</td><td>3</td><td>3</td><td>51%</td><td>12</td><td>1.11</td><td>Yes</td></tr><tr><td>A03</td><td>hyde</td><td>Yes</td><td>5</td><td>5</td><td>52%</td><td>6</td><td>0.39</td><td>—</td></tr><tr><td>A03</td><td>multi_query</td><td>Yes</td><td>5</td><td>5</td><td>71%</td><td>24</td><td>0.98</td><td>—</td></tr><tr><td>A04</td><td>baseline</td><td>Yes</td><td>1</td><td>1</td><td>52%</td><td>6</td><td>0.25</td><td>—</td></tr><tr><td>A04</td><td>flare</td><td>Yes</td><td>3</td><td>3</td><td>51%</td><td>12</td><td>0.64</td><td>Yes</td></tr><tr><td>A04</td><td>hyde</td><td>Yes</td><td>5</td><td>5</td><td>52%</td><td>6</td><td>0.29</td><td>—</td></tr><tr><td>A04</td><td>multi_query</td><td>Yes</td><td>4</td><td>4</td><td>75%</td><td>24</td><td>0.91</td><td>—</td></tr><tr><td>A05</td><td>baseline</td><td>Yes</td><td>1</td><td>1</td><td>61%</td><td>6</td><td>0.21</td><td>—</td></tr><tr><td>A05</td><td>flare</td><td>Yes</td><td>3</td><td>3</td><td>54%</td><td>12</td><td>0.85</td><td>Yes</td></tr><tr><td>A05</td><td>hyde</td><td>Yes</td><td>5</td><td>5</td><td>52%</td><td>6</td><td>0.46</td><td>—</td></tr><tr><td>A05</td><td>multi_query</td><td>Yes</td><td>4</td><td>4</td><td>75%</td><td>24</td><td>0.93</td><td>—</td></tr><tr><td>A06</td><td>baseline</td><td>Yes</td><td>6</td><td>6</td><td>49%</td><td>6</td><td>0.26</td><td>—</td></tr><tr><td>A06</td><td>flare</td><td>Yes</td><td>6</td><td>6</td><td>50%</td><td>12</td><td>0.64</td><td>Yes</td></tr><tr><td>A06</td><td>hyde</td><td>Yes</td><td>6</td><td>6</td><td>51%</td><td>6</td><td>0.29</td><td>—</td></tr><tr><td>A06</td><td>multi_query</td><td>Yes</td><td>6</td><td>6</td><td>67%</td><td>24</td><td>0.97</td><td>—</td></tr><tr><td>A07</td><td>baseline</td><td>Yes</td><td>2</td><td>2</td><td>52%</td><td>6</td><td>0.22</td><td>—</td></tr><tr><td>A07</td><td>flare</td><td>Yes</td><td>3</td><td>3</td><td>52%</td><td>12</td><td>0.56</td><td>Yes</td></tr><tr><td>A07</td><td>hyde</td><td>Yes</td><td>5</td><td>5</td><td>52%</td><td>6</td><td>0.27</td><td>—</td></tr><tr><td>A07</td><td>multi_query</td><td>Yes</td><td>4</td><td>4</td><td>75%</td><td>24</td><td>0.87</td><td>—</td></tr><tr><td>A08</td><td>baseline</td><td>Yes</td><td>2</td><td>2</td><td>56%</td><td>6</td><td>0.23</td><td>—</td></tr><tr><td>A08</td><td>flare</td><td>Yes</td><td>3</td><td>3</td><td>54%</td><td>12</td><td>0.64</td><td>Yes</td></tr><tr><td>A08</td><td>hyde</td><td>Yes</td><td>5</td><td>5</td><td>52%</td><td>6</td><td>0.28</td><td>—</td></tr><tr><td>A08</td><td>multi_query</td><td>Yes</td><td>5</td><td>5</td><td>71%</td><td>24</td><td>1.25</td><td>—</td></tr></tbody>
+    </table>
+  </section>
+  <p class="note">Regenerate: python scripts/run_retrieval_ablation_offline.py && python scripts/generate_ablation_stakeholder_report.py</p>
+</body>
+</html>

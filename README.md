@@ -218,6 +218,8 @@ Full **FLARE** ([Jiang et al., arXiv:2305.06983](https://arxiv.org/abs/2305.0698
 
 Benchmark cases: `evaluation/retrieval_ablation.json` (8 probes) or `--bench evaluation/wiki_public_bench.json`. The script prints per-strategy **grounded rate**, **latency p50/p95**, **avg unique docs**, and **Jaccard overlap vs baseline** for slide-ready Markdown.
 
+**Stakeholder visuals:** Offline scores → `python scripts/run_retrieval_ablation_offline.py` then `python scripts/refresh_stakeholder_views.py` → open `evaluation/reports/stakeholder_dashboard.html`. In Cursor, open canvas **documind-retrieval-scores** (charts + per-query scorecard).
+
 ### 8.3 Other approaches (documented, not default)
 
 | Approach | Why not default in this repo |
