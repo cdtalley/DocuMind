@@ -20,6 +20,9 @@ class Settings(BaseSettings):
     # When true, startup indexes data/sample_docs/* into the papers collection (synthetic DS briefs).
     # Deprecated for Wikipedia-first / production-style deployments: leave false (default) and bulk-index public text instead.
     SEED_SAMPLE_DOCS: bool = False
+    # When true and the public index is empty, ingest curated hand-authored files from data/sample_docs/
+    # (excludes sample_corpus_p7_* synthetics) so the dashboard is usable on first boot.
+    SEED_PUBLIC_IF_EMPTY: bool = True
     CHUNK_SIZE: int = 800
     CHUNK_OVERLAP: int = 100
     TOP_K_RESULTS: int = 6

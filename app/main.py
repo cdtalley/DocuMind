@@ -110,6 +110,52 @@ def seed_sample_docs(registry: EmbeddingRegistry) -> None:
         logger.info("Seeded sample paper: %s", sample_file.name)
 
 
+def _curated_public_demo_files(sample_dir: Path) -> list[Path]:
+    """Hand-authored briefs only — skip the 400-file synthetic sample_corpus_p7_* bundle."""
+    return sorted(
+        p
+        for p in sample_dir.glob("*.txt")
+        if not p.name.startswith(".") and not p.name.startswith("sample_corpus_p7_")
+    )
+
+
+def seed_public_if_empty(registry: EmbeddingRegistry) -> None:
+    """Index curated demo articles into the public library when Chroma has zero vectors."""
+    global document_service
+    assert document_service is not None
+    if not settings.SEED_PUBLIC_IF_EMPTY:
+        return
+    public = registry.public
+    if int(public.collection_stats().get("total_chunks", 0)) > 0:
+        return
+    if ollama_client is None or not ollama_client.health_check().get("available", False):
+        logger.info("Skipping public demo seed because Ollama is unavailable.")
+        return
+    project_root = Path(__file__).resolve().parent.parent
+    sample_dir = project_root / "data" / "sample_docs"
+    if not sample_dir.exists():
+        return
+    demo_files = _curated_public_demo_files(sample_dir)
+    if not demo_files:
+        return
+    logger.info(
+        "Public index empty — seeding %s curated demo article(s) into %s.",
+        len(demo_files),
+        settings.CHROMA_COLLECTION_PUBLIC,
+    )
+    seeded = 0
+    for sample_file in demo_files:
+        doc_id = f"demo_{sample_file.stem}"
+        if any(paper["doc_id"] == doc_id for paper in public.list_papers()):
+            continue
+        file_bytes = sample_file.read_bytes()
+        docs, _ = document_service.process(file_bytes, sample_file.name, doc_id)
+        public.add_documents(docs, doc_id)
+        seeded += 1
+        logger.info("Seeded public demo article: %s", sample_file.name)
+    logger.info("Public demo seed complete (%s new document(s)).", seeded)
+
+
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     global ollama_client, embedding_registry, document_service
@@ -187,6 +233,10 @@ async def lifespan(_: FastAPI):
             seed_sample_docs(embedding_registry)
         except Exception as exc:
             logger.warning("Failed to seed sample docs: %s", exc)
+    try:
+        seed_public_if_empty(embedding_registry)
+    except Exception as exc:
+        logger.warning("Failed to seed public demo articles: %s", exc)
     mark_process_started()
     yield
     logger.info("DocuMind shutting down")

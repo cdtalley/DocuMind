@@ -4,8 +4,7 @@ import { FormEvent, useCallback, useEffect, useMemo, useState, type ReactNode } 
 import type { Components } from "react-markdown";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://127.0.0.1:8001";
+import { getApiBaseUrl } from "../lib/api-base";
 /** Increment when shipping visible UI or diagnostics changes. */
 const DASHBOARD_UI_VERSION = "1.1.0";
 
@@ -185,18 +184,6 @@ function formatUptime(totalSec: number): string {
   return `${s}s`;
 }
 
-const PRESET_LIBRARY: PaperCard[] = [
-  {
-    doc_id: "__catalog__",
-    filename: "Public index",
-    title: "Public index — bulk script or small-file ingest",
-    authors: "Primary corpus",
-    year: "",
-    arxiv_id: "",
-    chunk_count: 0
-  }
-];
-
 const modes = [
   { label: "General Q&A", value: "general" },
   { label: "Compare across articles", value: "compare" },
@@ -279,6 +266,9 @@ export default function HomePage() {
   const [modelUsed, setModelUsed] = useState<string | null>(null);
   const [libraries, setLibraries] = useState<LibrariesPayload | null>(null);
   const [diagnostics, setDiagnostics] = useState<DiagnosticsPayload | null>(null);
+  const [bootstrapping, setBootstrapping] = useState(true);
+
+  const apiBaseUrl = useMemo(() => getApiBaseUrl(), []);
 
   const libraryStats = useMemo(
     () => ({
@@ -287,10 +277,9 @@ export default function HomePage() {
     }),
     [papers]
   );
-  const displayPapers = papers.length > 0 ? papers : PRESET_LIBRARY;
 
   const fetchJson = async <T,>(path: string, options?: RequestInit): Promise<T> => {
-    const response = await fetch(`${API_BASE_URL}${path}`, options);
+    const response = await fetch(`${apiBaseUrl}${path}`, options);
     if (!response.ok) {
       let detail = `${response.status} ${response.statusText}`;
       try {
@@ -304,7 +293,7 @@ export default function HomePage() {
     return (await response.json()) as T;
   };
 
-  const refresh = async () => {
+  const refresh = async (): Promise<boolean> => {
     try {
       const [healthPayload, papersPayload, librariesPayload, diagPayload] = await Promise.all([
         fetchJson<HealthPayload>("/health"),
@@ -319,6 +308,7 @@ export default function HomePage() {
       setApiHealthy(true);
       setLastSync(new Date());
       setNotice("");
+      return true;
     } catch {
       setApiHealthy(false);
       setHealth(null);
@@ -326,15 +316,28 @@ export default function HomePage() {
       setLibraries(null);
       setDiagnostics(null);
       setNotice(
-        `API unreachable at ${API_BASE_URL}. Run: .\\start_documind.ps1 from the project root (or uvicorn on port 8001).`
+        `API unreachable at ${apiBaseUrl}. Run: .\\start_documind.ps1 from the project root (or uvicorn on port 8001).`
       );
       setNoticeTone("error");
+      return false;
     }
   };
 
   useEffect(() => {
-    void refresh();
-  }, []);
+    let cancelled = false;
+    const bootstrap = async () => {
+      for (let attempt = 0; attempt < 36 && !cancelled; attempt++) {
+        const ok = await refresh();
+        if (ok) break;
+        await new Promise((resolve) => setTimeout(resolve, 5000));
+      }
+      if (!cancelled) setBootstrapping(false);
+    };
+    void bootstrap();
+    return () => {
+      cancelled = true;
+    };
+  }, [apiBaseUrl]);
 
   const runQuery = useCallback(async () => {
     setLoading(true);
@@ -453,7 +456,7 @@ export default function HomePage() {
         : {};
 
   const ollamaOk = Boolean(apiHealthy && health?.ollama_available);
-  const apiDocsUrl = `${API_BASE_URL.replace(/\/$/, "")}/docs`;
+  const apiDocsUrl = `${apiBaseUrl.replace(/\/$/, "")}/docs`;
   const syncLabel = lastSync
     ? lastSync.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit", second: "2-digit" })
     : "—";
@@ -528,7 +531,7 @@ export default function HomePage() {
           <a className="topbar-link" href={apiDocsUrl} target="_blank" rel="noreferrer">
             OpenAPI
           </a>
-          <code className="topbar-code">{API_BASE_URL}</code>
+          <code className="topbar-code">{apiBaseUrl}</code>
         </div>
       </header>
 
@@ -705,7 +708,9 @@ export default function HomePage() {
               </span>
             </div>
             <div className="hero-metrics" aria-label="Public index snapshot">
-              {libraries ? (
+              {bootstrapping && !libraries ? (
+                <p className="hero-metrics-foot">Connecting to API and loading index counts…</p>
+              ) : libraries ? (
                 <>
                   <div className="hero-metric">
                     <div className="hero-metric__value">{libraries.public.paper_count.toLocaleString()}</div>
@@ -954,14 +959,17 @@ export default function HomePage() {
             <h2 className="card-h2">Articles in public index</h2>
             <span className="library-count">{publicArticleCount.toLocaleString()} in index</span>
           </div>
-          {papers.length === 0 ? (
+          {bootstrapping && papers.length === 0 ? (
+            <p style={{ color: "var(--text-muted)" }}>Loading articles from the public index…</p>
+          ) : papers.length === 0 ? (
             <p style={{ color: "var(--text-muted)" }}>
               No public vectors yet — run <code>scripts/bulk_index_public.py</code> against your <code>.txt</code>{" "}
-              shards, or ingest a small file above. Use <code>/api/v1/libraries</code> to confirm counts.
+              shards, or ingest a small file above. Restart the API with an empty index to auto-seed curated demo
+              articles (<code>SEED_PUBLIC_IF_EMPTY=true</code>).
             </p>
           ) : null}
           <div className="library-grid">
-            {displayPapers.map((paper) => (
+            {papers.map((paper) => (
               <div className="card card--inset library-card" key={paper.doc_id}>
                 <strong>{paper.title}</strong>
                 <p className="card-meta">
@@ -972,11 +980,9 @@ export default function HomePage() {
                     arXiv:{paper.arxiv_id}
                   </a>
                 )}
-                {!paper.doc_id.startsWith("preset_") && paper.doc_id !== "__catalog__" && (
-                  <button type="button" className="btn-ghost" style={{ marginTop: 12 }} onClick={() => void deletePaper(paper.doc_id)}>
-                    Remove from index
-                  </button>
-                )}
+                <button type="button" className="btn-ghost" style={{ marginTop: 12 }} onClick={() => void deletePaper(paper.doc_id)}>
+                  Remove from index
+                </button>
               </div>
             ))}
           </div>
