@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import json
 import logging
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import StreamingResponse
 
 from app.config import get_settings
 from app.main import get_embedding_registry, get_ollama_client
@@ -56,6 +58,43 @@ async def query_papers(
             status_code=500,
             detail="Answer generation failed. Check API logs for details.",
         ) from exc
+
+
+@router.post("/query/stream")
+async def query_papers_stream(
+    request: QueryRequest,
+    rag_service: RAGService = Depends(get_rag_for_query),
+    ollama_client: OllamaClient = Depends(get_ollama_client),
+) -> StreamingResponse:
+    """Server-Sent Events: retrieval metadata first, then streamed answer tokens, then done."""
+    if not ollama_client.health_check().get("available", False):
+        raise HTTPException(status_code=503, detail="Ollama is unavailable. Start Ollama first (`ollama serve`).")
+
+    def event_stream():
+        try:
+            for item in rag_service.answer_stream(
+                query=request.query,
+                top_k=request.top_k,
+                query_mode=request.query_mode,
+                section_filter=request.section_filter,
+                use_flare=request.use_flare,
+                retrieval_strategy=request.retrieval_strategy,
+                retrieve_only=request.retrieve_only,
+            ):
+                yield f"event: {item['event']}\ndata: {json.dumps(item['data'])}\n\n"
+        except OllamaConnectionError as exc:
+            payload = json.dumps({"detail": f"Ollama is unavailable. Details: {exc}"})
+            yield f"event: error\ndata: {payload}\n\n"
+        except Exception as exc:
+            logger.exception("RAG stream query failed: %s", exc)
+            payload = json.dumps({"detail": "Answer generation failed. Check API logs for details."})
+            yield f"event: error\ndata: {payload}\n\n"
+
+    return StreamingResponse(
+        event_stream(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
 
 
 @router.get("/libraries", response_model=LibrariesResponse)

@@ -1,4 +1,6 @@
+import json
 import time
+from collections.abc import Iterator
 from typing import Any
 
 import requests
@@ -48,6 +50,41 @@ class OllamaClient:
                 else:
                     raise OllamaConnectionError(
                         f"Ollama LLM error at {self.base_url} after retries: {last_err!s}"
+                    ) from last_err
+        raise AssertionError("unreachable")
+
+    def chat_stream(self, messages: list[dict[str, Any]], temperature: float = 0.1) -> Iterator[str]:
+        """Stream assistant content tokens from Ollama /api/chat (stream=True)."""
+        url = f"{self.base_url}/api/chat"
+        payload = {
+            "model": self.llm_model,
+            "messages": messages,
+            "stream": True,
+            "options": {"temperature": temperature},
+        }
+        last_err: BaseException | None = None
+        for attempt in range(3):
+            try:
+                with requests.post(url, json=payload, stream=True, timeout=self._timeout) as response:
+                    response.raise_for_status()
+                    for raw in response.iter_lines(decode_unicode=True):
+                        if not raw:
+                            continue
+                        data = json.loads(raw)
+                        if data.get("done"):
+                            return
+                        msg = data.get("message") or {}
+                        piece = msg.get("content") if isinstance(msg, dict) else None
+                        if piece:
+                            yield str(piece)
+                return
+            except Exception as exc:
+                last_err = exc
+                if attempt < 2:
+                    time.sleep(2)
+                else:
+                    raise OllamaConnectionError(
+                        f"Ollama LLM stream error at {self.base_url} after retries: {last_err!s}"
                     ) from last_err
         raise AssertionError("unreachable")
 

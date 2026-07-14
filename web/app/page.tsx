@@ -1,10 +1,11 @@
 "use client";
 
-import { FormEvent, useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import { FormEvent, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { Components } from "react-markdown";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { getApiBaseUrl } from "../lib/api-base";
+import { streamQuery } from "../lib/query-stream";
 /** Increment when shipping visible UI or diagnostics changes. */
 const DASHBOARD_UI_VERSION = "1.1.0";
 
@@ -193,6 +194,8 @@ const modes = [
 ];
 
 type NoticeTone = "info" | "success" | "error";
+type LibraryId = "public" | "papers";
+type QueryPhase = "idle" | "retrieving" | "synthesizing" | "done";
 
 /** Rich Markdown mapping: section cards, sticky tables, callouts — tuned for long RAG answers. */
 const MARKDOWN_COMPONENTS: Components = {
@@ -267,6 +270,11 @@ export default function HomePage() {
   const [libraries, setLibraries] = useState<LibrariesPayload | null>(null);
   const [diagnostics, setDiagnostics] = useState<DiagnosticsPayload | null>(null);
   const [bootstrapping, setBootstrapping] = useState(true);
+  const [library, setLibrary] = useState<LibraryId>("public");
+  const [simpleQuestion, setSimpleQuestion] = useState("");
+  const [queryPhase, setQueryPhase] = useState<QueryPhase>("idle");
+  const [queryElapsedMs, setQueryElapsedMs] = useState(0);
+  const abortRef = useRef<AbortController | null>(null);
 
   const apiBaseUrl = useMemo(() => getApiBaseUrl(), []);
 
@@ -293,35 +301,38 @@ export default function HomePage() {
     return (await response.json()) as T;
   };
 
-  const refresh = async (): Promise<boolean> => {
-    try {
-      const [healthPayload, papersPayload, librariesPayload, diagPayload] = await Promise.all([
-        fetchJson<HealthPayload>("/health"),
-        fetchJson<PaperCard[]>(`/api/v1/papers?library=${encodeURIComponent("public")}`),
-        fetchJson<LibrariesPayload>("/api/v1/libraries"),
-        fetchJson<DiagnosticsPayload>("/api/v1/diagnostics")
-      ]);
-      setHealth(healthPayload);
-      setPapers(papersPayload);
-      setLibraries(librariesPayload);
-      setDiagnostics(diagPayload);
-      setApiHealthy(true);
-      setLastSync(new Date());
-      setNotice("");
-      return true;
-    } catch {
-      setApiHealthy(false);
-      setHealth(null);
-      setPapers([]);
-      setLibraries(null);
-      setDiagnostics(null);
-      setNotice(
-        `API unreachable at ${apiBaseUrl}. Run: .\\start_documind.ps1 from the project root (or uvicorn on port 8001).`
-      );
-      setNoticeTone("error");
-      return false;
-    }
-  };
+  const refresh = useCallback(
+    async (activeLibrary: LibraryId = library): Promise<boolean> => {
+      try {
+        const [healthPayload, papersPayload, librariesPayload, diagPayload] = await Promise.all([
+          fetchJson<HealthPayload>("/health"),
+          fetchJson<PaperCard[]>(`/api/v1/papers?library=${encodeURIComponent(activeLibrary)}`),
+          fetchJson<LibrariesPayload>("/api/v1/libraries"),
+          fetchJson<DiagnosticsPayload>("/api/v1/diagnostics")
+        ]);
+        setHealth(healthPayload);
+        setPapers(papersPayload);
+        setLibraries(librariesPayload);
+        setDiagnostics(diagPayload);
+        setApiHealthy(true);
+        setLastSync(new Date());
+        setNotice("");
+        return true;
+      } catch {
+        setApiHealthy(false);
+        setHealth(null);
+        setPapers([]);
+        setLibraries(null);
+        setDiagnostics(null);
+        setNotice(
+          `API unreachable at ${apiBaseUrl}. Run: .\\start_documind.ps1 from the project root (or uvicorn on port 8001).`
+        );
+        setNoticeTone("error");
+        return false;
+      }
+    },
+    [apiBaseUrl, library]
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -339,37 +350,97 @@ export default function HomePage() {
     };
   }, [apiBaseUrl]);
 
-  const runQuery = useCallback(async () => {
-    setLoading(true);
-    setNotice("");
-    setNoticeTone("info");
-    try {
-      const data = await fetchJson<QueryResponse>("/api/v1/query", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          query,
-          library: "public",
-          top_k: topK,
-          query_mode: mode,
-          section_filter: null,
-          use_flare: useFlare
-        })
-      });
-      setAnswer(data.answer);
-      setSources(data.sources || []);
-      setConfidence(Number(data.confidence ?? 0));
-      setHasAnswer(data.has_answer !== false);
-      setChunksSearched(typeof data.chunks_searched === "number" ? data.chunks_searched : null);
-      setModelUsed(typeof data.model_used === "string" ? data.model_used : null);
-      setFlareFollowUp(data.flare_followup_retrieval === true);
-    } catch (error) {
-      setNotice(error instanceof Error ? error.message : "Query failed");
-      setNoticeTone("error");
-    } finally {
-      setLoading(false);
-    }
-  }, [query, topK, mode, useFlare]);
+  useEffect(() => {
+    if (!apiHealthy || bootstrapping) return;
+    void refresh(library);
+  }, [library, apiHealthy, bootstrapping, refresh]);
+
+  const runQuery = useCallback(
+    async (
+      overrideQuery?: string,
+      opts?: { query_mode?: string; top_k?: number }
+    ) => {
+      const q = (overrideQuery ?? query).trim();
+      if (!q) return;
+
+      abortRef.current?.abort();
+      const controller = new AbortController();
+      abortRef.current = controller;
+
+      const effectiveMode = opts?.query_mode ?? mode;
+      const effectiveTopK = opts?.top_k ?? topK;
+
+      setLoading(true);
+      setQueryPhase("retrieving");
+      setQueryElapsedMs(0);
+      setNotice("");
+      setNoticeTone("info");
+      setAnswer("");
+      setSources([]);
+      setConfidence(0);
+      setHasAnswer(true);
+      setChunksSearched(null);
+      setModelUsed(null);
+      setFlareFollowUp(false);
+
+      const started = Date.now();
+      const timer = window.setInterval(() => setQueryElapsedMs(Date.now() - started), 400);
+
+      try {
+        await streamQuery(
+          {
+            query: q,
+            library,
+            top_k: effectiveTopK,
+            query_mode: effectiveMode,
+            section_filter: null,
+            use_flare: useFlare
+          },
+          {
+            onRetrieval: (data) => {
+              setSources(data.sources);
+              setConfidence(Number(data.confidence ?? 0));
+              setHasAnswer(data.has_answer !== false);
+              setChunksSearched(typeof data.chunks_searched === "number" ? data.chunks_searched : null);
+              setModelUsed(typeof data.model_used === "string" ? data.model_used : null);
+              setFlareFollowUp(data.flare_followup_retrieval === true);
+              setQueryPhase("synthesizing");
+            },
+            onToken: (text) => {
+              setAnswer((prev) => prev + text);
+              setQueryPhase("synthesizing");
+            },
+            onDone: (data) => {
+              setAnswer(data.answer);
+              setSources(data.sources || []);
+              setConfidence(Number(data.confidence ?? 0));
+              setHasAnswer(data.has_answer !== false);
+              setChunksSearched(typeof data.chunks_searched === "number" ? data.chunks_searched : null);
+              setModelUsed(typeof data.model_used === "string" ? data.model_used : null);
+              setFlareFollowUp(data.flare_followup_retrieval === true);
+              setQueryPhase("done");
+            },
+            onError: (message) => {
+              setNotice(message);
+              setNoticeTone("error");
+              setQueryPhase("idle");
+            }
+          },
+          controller.signal
+        );
+      } catch (error) {
+        if (!(error instanceof DOMException && error.name === "AbortError")) {
+          setNotice(error instanceof Error ? error.message : "Query failed");
+          setNoticeTone("error");
+        }
+        setQueryPhase("idle");
+      } finally {
+        window.clearInterval(timer);
+        setLoading(false);
+      }
+    },
+    [query, library, topK, mode, useFlare]
+  );
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -392,7 +463,7 @@ export default function HomePage() {
     setMode(s.mode);
     setTopK(s.topK);
     setUseFlare(typeof s.useFlare === "boolean" ? s.useFlare : false);
-    setNotice(`Loaded scenario: ${s.label} (public index)`);
+    setNotice(`Loaded scenario: ${s.label} (${library} index)`);
     setNoticeTone("success");
   };
 
@@ -408,10 +479,10 @@ export default function HomePage() {
       for (const file of Array.from(files)) {
         const form = new FormData();
         form.append("file", file);
-        form.append("library", "public");
+        form.append("library", library);
         await fetchJson(`/api/v1/ingest`, { method: "POST", body: form });
       }
-      setNotice("Upload complete — public index refreshed.");
+      setNotice(`Upload complete — ${library} index refreshed.`);
       setNoticeTone("success");
       await refresh();
     } catch (error) {
@@ -436,8 +507,8 @@ export default function HomePage() {
 
   const deletePaper = async (docId: string) => {
     try {
-      await fetchJson(`/api/v1/papers/${docId}?library=public`, { method: "DELETE" });
-      setNotice("Article removed from public index.");
+      await fetchJson(`/api/v1/papers/${docId}?library=${encodeURIComponent(library)}`, { method: "DELETE" });
+      setNotice(`Document removed from ${library} index.`);
       setNoticeTone("success");
       await refresh();
     } catch (error) {
@@ -463,8 +534,10 @@ export default function HomePage() {
 
   const indexedPapers = health?.collection_stats.paper_count ?? libraryStats.totalPapers;
   const indexedChunks = health?.collection_stats.total_chunks ?? libraryStats.totalChunks;
-  const publicArticleCount = libraries?.public.paper_count ?? indexedPapers;
-  const publicChunkCount = libraries?.public.total_chunks ?? indexedChunks;
+  const activeCollection = libraries ? (library === "public" ? libraries.public : libraries.papers) : null;
+  const activeArticleCount = activeCollection?.paper_count ?? indexedPapers;
+  const activeChunkCount = activeCollection?.total_chunks ?? indexedChunks;
+  const libraryLabel = library === "public" ? "Articles" : "Papers";
 
   return (
     <div className="app-root">
@@ -695,49 +768,64 @@ export default function HomePage() {
           <div className="card card--hero">
             <div className="card-hero-head">
               <div>
-                <h2 className="card-hero-title">Public corpus retrieval</h2>
+                <h2 className="card-hero-title">{library === "public" ? "Public corpus retrieval" : "Papers library retrieval"}</h2>
                 <p className="card-hero-lead">
-                  Queries use the <strong>public</strong> collection. Bulk indexing:{" "}
-                  <code>scripts/bulk_index_public.py</code> (checkpointed). Counts: <code>/api/v1/libraries</code>.
-                  Modes change retrieval budget and prompts; responses are Markdown with sources; optional second
-                  retrieval pass when enabled.
+                  Queries use the <strong>{library}</strong> collection. Sources appear first, then the answer streams in.
+                  Bulk indexing: <code>scripts/bulk_index_public.py</code> (public) or upload PDFs below (papers).
                 </p>
+              </div>
+              <div className="library-toggle" role="group" aria-label="Active library">
+                <button
+                  type="button"
+                  className={`library-toggle__btn ${library === "public" ? "library-toggle__btn--active" : ""}`}
+                  onClick={() => setLibrary("public")}
+                  disabled={loading}
+                >
+                  Public
+                </button>
+                <button
+                  type="button"
+                  className={`library-toggle__btn ${library === "papers" ? "library-toggle__btn--active" : ""}`}
+                  onClick={() => setLibrary("papers")}
+                  disabled={loading}
+                >
+                  Papers
+                </button>
               </div>
               <span className="kbd-hint" title="Submit from the question field">
                 Ctrl+Enter
               </span>
             </div>
-            <div className="hero-metrics" aria-label="Public index snapshot">
+            <div className="hero-metrics" aria-label="Active index snapshot">
               {bootstrapping && !libraries ? (
                 <p className="hero-metrics-foot">Connecting to API and loading index counts…</p>
               ) : libraries ? (
                 <>
                   <div className="hero-metric">
-                    <div className="hero-metric__value">{libraries.public.paper_count.toLocaleString()}</div>
-                    <div className="hero-metric__label">Articles (public)</div>
+                    <div className="hero-metric__value">{activeArticleCount.toLocaleString()}</div>
+                    <div className="hero-metric__label">{libraryLabel} ({library})</div>
                   </div>
                   <div className="hero-metric">
-                    <div className="hero-metric__value">{libraries.public.total_chunks.toLocaleString()}</div>
-                    <div className="hero-metric__label">Vectors (public)</div>
+                    <div className="hero-metric__value">{activeChunkCount.toLocaleString()}</div>
+                    <div className="hero-metric__label">Vectors ({library})</div>
                   </div>
                   <div className="hero-metric">
                     <div className="hero-metric__value">{modes.length}</div>
                     <div className="hero-metric__label">Retrieval modes</div>
                   </div>
                   <p className="hero-metrics-foot">
-                    Collection <strong>{libraries.public.collection_name}</strong> · Papers collection remains on the API
-                    for non-console clients
+                    Active collection <strong>{activeCollection?.collection_name}</strong>
                   </p>
                 </>
               ) : (
                 <>
                   <div className="hero-metric">
-                    <div className="hero-metric__value">{publicArticleCount.toLocaleString()}</div>
-                    <div className="hero-metric__label">Articles (public)</div>
+                    <div className="hero-metric__value">{activeArticleCount.toLocaleString()}</div>
+                    <div className="hero-metric__label">{libraryLabel}</div>
                   </div>
                   <div className="hero-metric">
-                    <div className="hero-metric__value">{publicChunkCount.toLocaleString()}</div>
-                    <div className="hero-metric__label">Vectors (public)</div>
+                    <div className="hero-metric__value">{activeChunkCount.toLocaleString()}</div>
+                    <div className="hero-metric__label">Vectors</div>
                   </div>
                   <div className="hero-metric">
                     <div className="hero-metric__value">{modes.length}</div>
@@ -746,6 +834,31 @@ export default function HomePage() {
                 </>
               )}
             </div>
+          </div>
+
+          <div className="card card--inset quick-ask">
+            <label htmlFor="simple-question">Quick question</label>
+            <div className="quick-ask__row">
+              <input
+                id="simple-question"
+                type="text"
+                value={simpleQuestion}
+                onChange={(e) => setSimpleQuestion(e.target.value)}
+                placeholder={library === "public" ? "Ask about indexed articles…" : "Ask about your papers…"}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && !loading) void runQuery(simpleQuestion, { query_mode: "general", top_k: 8 });
+                }}
+              />
+              <button
+                type="button"
+                className="btn-cta"
+                disabled={loading || !simpleQuestion.trim()}
+                onClick={() => void runQuery(simpleQuestion, { query_mode: "general", top_k: 8 })}
+              >
+                Ask
+              </button>
+            </div>
+            <p className="quick-ask__hint">Uses general mode on the selected library. Advanced presets and modes below.</p>
           </div>
 
           <div
@@ -761,8 +874,7 @@ export default function HomePage() {
               <span className="section-eyebrow">Presets</span>
               <strong>Scenario queries</strong>
               <p className="showcase-section__intro">
-                Each card sets prompt, mode, and Top K. All requests use <code>library=public</code>. Run query or
-                Submit.
+                Each card sets prompt, mode, and Top K for the active <strong>{library}</strong> library.
               </p>
               <div className="showcase-grid">
                 {SHOWCASE_SCENARIOS.map((s, idx) => (
@@ -849,8 +961,40 @@ export default function HomePage() {
             </div>
           </form>
 
-          {answer && (
+            {loading && (
+              <div className="query-status" role="status" aria-live="polite">
+                {queryPhase === "retrieving" && "Retrieving sources from vector index…"}
+                {queryPhase === "synthesizing" &&
+                  `Synthesizing answer… ${Math.max(1, Math.round(queryElapsedMs / 1000))}s`}
+                {queryPhase === "done" && "Finalizing…"}
+              </div>
+            )}
+
+          {(sources.length > 0 || answer) && (
             <div className={`card answer-panel ${!hasAnswer ? "answer-panel--muted" : ""}`} style={{ marginTop: 20 }}>
+              {sources.length > 0 && (
+                <div className="sources-first">
+                  <h4 className="sources-heading">Retrieved sources ({sources.length})</h4>
+                  <p className="sources-first__hint">Shown as soon as retrieval completes — synthesis may still be streaming.</p>
+                  {sources.map((source, index) => (
+                    <details key={`${source.doc_id}-${index}`} className="source-block" open={index < 2}>
+                      <summary>
+                        {index + 1}. {source.paper_title}
+                        {source.year ? ` (${source.year})` : ""} · {source.section}
+                      </summary>
+                      <span className="source-meta">
+                        Match {(source.distance ?? 0).toFixed(4)} · chunk {source.chunk_index} · page {source.page_number}
+                      </span>
+                      <p style={{ margin: "8px 0 0", color: "var(--text-muted)", fontSize: 13 }}>
+                        {source.content_preview}
+                      </p>
+                    </details>
+                  ))}
+                </div>
+              )}
+
+              {answer && (
+                <>
               <div className="answer-panel__head">
                 <h3 className="answer-panel__title" id="synthesis-heading">
                   Synthesis
@@ -875,6 +1019,9 @@ export default function HomePage() {
                     Mode <strong>{mode}</strong>
                   </span>
                   <span className="answer-meta-pill answer-meta-pill--muted">
+                    Library <strong>{library}</strong>
+                  </span>
+                  <span className="answer-meta-pill answer-meta-pill--muted">
                     Citations <strong>{sources.length}</strong>
                   </span>
                   {flareFollowUp ? (
@@ -887,8 +1034,7 @@ export default function HomePage() {
 
               {!hasAnswer && (
                 <div className="notice notice--warn" style={{ marginTop: 12 }}>
-                  No grounded answer from the public index — raise Top K, switch mode, bulk-index more articles, or
-                  rephrase.
+                  No grounded answer from the {library} index — raise Top K, switch mode, add documents, or rephrase.
                 </div>
               )}
 
@@ -900,7 +1046,7 @@ export default function HomePage() {
 
               <div className="confidence-row">
                 <span id="confidence-label" style={{ fontSize: 13, color: "var(--text-muted)" }}>
-                  Confidence
+                  Retrieval match
                 </span>
                 <progress
                   value={Math.min(1, Math.max(0, confidence))}
@@ -912,33 +1058,14 @@ export default function HomePage() {
                 />
                 <span style={{ fontSize: 13, fontWeight: 600 }}>{(confidence * 100).toFixed(0)}%</span>
               </div>
-
-              {sources.length > 0 && (
-                <div style={{ marginTop: 20 }}>
-                  <h4 className="sources-heading">Sources</h4>
-                  {sources.map((source, index) => (
-                    <details key={`${source.doc_id}-${index}`} className="source-block">
-                      <summary>
-                        {index + 1}. {source.paper_title}
-                        {source.year ? ` (${source.year})` : ""} · {source.section}
-                      </summary>
-                      <span className="source-meta">
-                        Distance {(source.distance ?? 0).toFixed(4)} · chunk {source.chunk_index} · page{" "}
-                        {source.page_number}
-                      </span>
-                      <p style={{ margin: "8px 0 0", color: "var(--text-muted)", fontSize: 13 }}>
-                        {source.content_preview}
-                      </p>
-                    </details>
-                  ))}
-                </div>
+                </>
               )}
             </div>
           )}
           </div>
 
         <div className="card">
-          <h2 className="card-h2">Ingest (public)</h2>
+          <h2 className="card-h2">Ingest ({library})</h2>
           <p style={{ color: "var(--text-muted)", fontSize: 14, marginTop: 0 }}>
             Small files only. Large corpora: <code>scripts/bulk_index_public.py</code> with a checkpoint.
           </p>
@@ -956,8 +1083,8 @@ export default function HomePage() {
 
         <div className="card">
           <div className="library-card-header">
-            <h2 className="card-h2">Articles in public index</h2>
-            <span className="library-count">{publicArticleCount.toLocaleString()} in index</span>
+            <h2 className="card-h2">{library === "public" ? "Articles in public index" : "Papers in library"}</h2>
+            <span className="library-count">{activeArticleCount.toLocaleString()} in index</span>
           </div>
           {bootstrapping && papers.length === 0 ? (
             <p style={{ color: "var(--text-muted)" }}>Loading articles from the public index…</p>

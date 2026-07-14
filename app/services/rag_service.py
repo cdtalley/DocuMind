@@ -3,7 +3,8 @@ from __future__ import annotations
 import logging
 import re
 from dataclasses import dataclass
-from typing import Literal
+from collections.abc import Iterator
+from typing import Any, Literal
 
 from app.models.library import LibraryId
 from app.models.response_models import AnswerResponse, SourceCitation
@@ -647,6 +648,219 @@ class RAGService:
             for item in filtered
         ]
 
+    def _empty_answer_message(self) -> str:
+        if self._content_library == "public":
+            return (
+                "I could not find relevant information in the indexed public corpus for this question. "
+                "Bulk-index Wikipedia text (see scripts/bulk_index_public.py) or ingest .txt files with library=public."
+            )
+        return (
+            "I could not find relevant information in your paper library for this question. "
+            "Try uploading more papers or rephrasing your query."
+        )
+
+    @staticmethod
+    def _confidence_from_chunks(filtered: list[dict]) -> float:
+        confidence = round(1.0 - (sum(item["distance"] for item in filtered) / len(filtered)), 2)
+        return max(0.0, min(1.0, confidence))
+
+    @staticmethod
+    def _temperature_for_mode(query_mode: str) -> float:
+        if query_mode in ("general", "compare"):
+            return 0.28
+        if query_mode in ("methodology", "reproduce"):
+            return 0.16
+        return 0.1
+
+    def _compose_chat_request(self, query: str, query_mode: str, filtered: list[dict]) -> tuple[list[dict[str, str]], float]:
+        context_parts = []
+        src_label = "Article" if self._content_library == "public" else "Paper"
+        corpus = "encyclopedia articles" if self._content_library == "public" else "research papers"
+        for i, item in enumerate(filtered):
+            metadata = item["metadata"]
+            context_parts.append(
+                f"[Source {i + 1}] {src_label}: {metadata.get('title', 'Unknown')} | "
+                f"Section: {metadata.get('section', 'body')} | "
+                f"Page: {metadata.get('page_number', 0)}\n{item['content']}\n\n"
+            )
+        context = "".join(context_parts)
+        system_prompt = self._system_prompts().get(query_mode, self._system_prompts()["general"])
+        cite = "**Article title**" if self._content_library == "public" else "**Paper title**"
+        user_message = (
+            f"Context from {corpus}:\n\n{context}\n"
+            f"Question:\n{query}\n\n"
+            "Produce the full structured answer. Be thorough where the passages allow: multi-paragraph ### sections, "
+            "nested bullets, and a rich comparison table when in compare mode. "
+            f"Bold {cite} throughout. If a section has little evidence, keep it short and label the gap."
+        )
+        messages = [{"role": "system", "content": system_prompt}, {"role": "user", "content": user_message}]
+        return messages, self._temperature_for_mode(query_mode)
+
+    def _build_datasets_answer(self, filtered: list[dict]) -> str:
+        extracted = self._extract_datasets_from_sources(filtered)
+        if not extracted:
+            return (
+                "## Dataset inventory\n\n"
+                "No named datasets or benchmarks were detected in the retrieved passages. "
+                "Try a broader **Top K**, another mode, or add content whose passages mention benchmarks."
+            )
+        unique_datasets = {row[0] for row in extracted}
+        unique_papers = {row[1] for row in extracted}
+        scope = "articles" if self._content_library == "public" else "papers"
+        row_unit = "article" if self._content_library == "public" else "paper"
+        answer_lines = [
+            "## Dataset inventory",
+            f"*Library-scoped scan — **{len(unique_datasets)}** dataset labels across **{len(unique_papers)}** {scope} "
+            f"({len(extracted)} mentions in retrieved chunks).*",
+            "",
+            "### At a glance",
+            f"- **{len(unique_datasets)}** distinct dataset or benchmark names detected",
+            f"- **{len(unique_papers)}** contributing {scope} in this answer",
+            f"- **{len(extracted)}** total dataset–{row_unit} mention rows (sorted below)",
+            "",
+            "### Entries",
+        ]
+        for dataset_name, paper_title, usage in extracted:
+            answer_lines.append(f"- **{dataset_name}** — **{paper_title}** — _{usage}_")
+        return "\n".join(answer_lines)
+
+    def _answer_response(
+        self,
+        *,
+        answer: str,
+        sources: list[SourceCitation],
+        confidence: float,
+        has_answer: bool,
+        query: str,
+        query_mode: str,
+        chunks_searched: int,
+        flare_on: bool,
+        flare_follow_up: bool,
+        strategy: str,
+        retrieval_passes: int,
+    ) -> AnswerResponse:
+        return AnswerResponse(
+            answer=answer,
+            sources=sources,
+            confidence=confidence,
+            has_answer=has_answer,
+            query=query,
+            query_mode=query_mode,
+            model_used=self.settings.LLM_MODEL,
+            chunks_searched=chunks_searched,
+            flare_enabled=flare_on,
+            flare_followup_retrieval=flare_follow_up,
+            retrieval_strategy=strategy,
+            retrieval_passes=retrieval_passes,
+            library=self._content_library,
+        )
+
+    def answer_stream(
+        self,
+        query: str,
+        top_k: int,
+        query_mode: str = "general",
+        section_filter: str | None = None,
+        use_flare: bool = False,
+        retrieval_strategy: str = "baseline",
+        retrieve_only: bool = False,
+    ) -> Iterator[dict[str, Any]]:
+        """Yield SSE-friendly events: retrieval (sources first), token chunks, then done."""
+        strategy = self._effective_retrieval_strategy(
+            retrieval_strategy,
+            use_flare=use_flare,
+            flare_active_default=bool(self.settings.FLARE_ACTIVE_RETRIEVAL),
+            query_mode=query_mode,
+        )
+        flare_on = strategy == "flare"
+        outcome = self._run_retrieval(query, top_k, query_mode, section_filter, strategy)
+        filtered = outcome.filtered
+        used_fallback = outcome.used_fallback
+        chunks_searched = outcome.chunks_searched
+        flare_follow_up = outcome.flare_follow_up
+        strategy = outcome.strategy
+        retrieval_passes = outcome.retrieval_passes
+
+        if not filtered:
+            payload = self._answer_response(
+                answer=self._empty_answer_message(),
+                sources=[],
+                confidence=0.0,
+                has_answer=False,
+                query=query,
+                query_mode=query_mode,
+                chunks_searched=chunks_searched,
+                flare_on=flare_on,
+                flare_follow_up=flare_follow_up,
+                strategy=strategy,
+                retrieval_passes=retrieval_passes,
+            ).model_dump(mode="json")
+            yield {"event": "done", "data": payload}
+            return
+
+        sources = self._sources_from_chunks(filtered)
+        confidence = self._confidence_from_chunks(filtered)
+        meta = {
+            "sources": [s.model_dump(mode="json") for s in sources],
+            "confidence": confidence,
+            "has_answer": True,
+            "query": query,
+            "query_mode": query_mode,
+            "model_used": self.settings.LLM_MODEL,
+            "chunks_searched": chunks_searched,
+            "flare_enabled": flare_on,
+            "flare_followup_retrieval": flare_follow_up,
+            "retrieval_strategy": strategy,
+            "retrieval_passes": retrieval_passes,
+            "library": self._content_library,
+        }
+        yield {"event": "retrieval", "data": meta}
+
+        if retrieve_only and query_mode != "datasets":
+            payload = self._answer_response(
+                answer="",
+                sources=sources,
+                confidence=confidence,
+                has_answer=True,
+                query=query,
+                query_mode=query_mode,
+                chunks_searched=chunks_searched,
+                flare_on=flare_on,
+                flare_follow_up=flare_follow_up,
+                strategy=strategy,
+                retrieval_passes=retrieval_passes,
+            ).model_dump(mode="json")
+            yield {"event": "done", "data": payload}
+            return
+
+        if query_mode == "datasets":
+            answer_text = self._build_datasets_answer(filtered)
+        else:
+            messages, temp = self._compose_chat_request(query, query_mode, filtered)
+            parts: list[str] = []
+            for piece in self.ollama_client.chat_stream(messages, temperature=temp):
+                parts.append(piece)
+                yield {"event": "token", "data": {"text": piece}}
+            answer_text = "".join(parts)
+
+        if used_fallback and query_mode != "datasets":
+            answer_text = f"{answer_text}\n\n*Retrieval: using best-matching passages (strict distance threshold not met).*"
+
+        payload = self._answer_response(
+            answer=answer_text,
+            sources=sources,
+            confidence=confidence,
+            has_answer=True,
+            query=query,
+            query_mode=query_mode,
+            chunks_searched=chunks_searched,
+            flare_on=flare_on,
+            flare_follow_up=flare_follow_up,
+            strategy=strategy,
+            retrieval_passes=retrieval_passes,
+        ).model_dump(mode="json")
+        yield {"event": "done", "data": payload}
+
     def answer(
         self,
         query: str,
@@ -674,125 +888,56 @@ class RAGService:
         retrieval_passes = outcome.retrieval_passes
 
         if not filtered:
-            if self._content_library == "public":
-                empty = (
-                    "I could not find relevant information in the indexed public corpus for this question. "
-                    "Bulk-index Wikipedia text (see scripts/bulk_index_public.py) or ingest .txt files with library=public."
-                )
-            else:
-                empty = (
-                    "I could not find relevant information in your paper library for this question. "
-                    "Try uploading more papers or rephrasing your query."
-                )
-            return AnswerResponse(
-                answer=empty,
+            return self._answer_response(
+                answer=self._empty_answer_message(),
                 sources=[],
                 confidence=0.0,
                 has_answer=False,
                 query=query,
-                model_used=self.settings.LLM_MODEL,
                 query_mode=query_mode,
                 chunks_searched=chunks_searched,
-                flare_enabled=flare_on,
-                flare_followup_retrieval=flare_follow_up,
-                retrieval_strategy=strategy,
+                flare_on=flare_on,
+                flare_follow_up=flare_follow_up,
+                strategy=strategy,
                 retrieval_passes=retrieval_passes,
-                library=self._content_library,
             )
 
         sources = self._sources_from_chunks(filtered)
-        confidence = round(1.0 - (sum(item["distance"] for item in filtered) / len(filtered)), 2)
-        confidence = max(0.0, min(1.0, confidence))
+        confidence = self._confidence_from_chunks(filtered)
 
         if retrieve_only and query_mode != "datasets":
-            return AnswerResponse(
+            return self._answer_response(
                 answer="",
                 sources=sources,
                 confidence=confidence,
                 has_answer=True,
                 query=query,
                 query_mode=query_mode,
-                model_used=self.settings.LLM_MODEL,
                 chunks_searched=chunks_searched,
-                flare_enabled=flare_on,
-                flare_followup_retrieval=flare_follow_up,
-                retrieval_strategy=strategy,
+                flare_on=flare_on,
+                flare_follow_up=flare_follow_up,
+                strategy=strategy,
                 retrieval_passes=retrieval_passes,
-                library=self._content_library,
             )
 
         if query_mode == "datasets":
-            extracted = self._extract_datasets_from_sources(filtered)
-            if extracted:
-                unique_datasets = {row[0] for row in extracted}
-                unique_papers = {row[1] for row in extracted}
-                scope = "articles" if self._content_library == "public" else "papers"
-                row_unit = "article" if self._content_library == "public" else "paper"
-                answer_lines = [
-                    "## Dataset inventory",
-                    f"*Library-scoped scan — **{len(unique_datasets)}** dataset labels across **{len(unique_papers)}** {scope} "
-                    f"({len(extracted)} mentions in retrieved chunks).*",
-                    "",
-                    "### At a glance",
-                    f"- **{len(unique_datasets)}** distinct dataset or benchmark names detected",
-                    f"- **{len(unique_papers)}** contributing {scope} in this answer",
-                    f"- **{len(extracted)}** total dataset–{row_unit} mention rows (sorted below)",
-                    "",
-                    "### Entries",
-                ]
-                for dataset_name, paper_title, usage in extracted:
-                    answer_lines.append(f"- **{dataset_name}** — **{paper_title}** — _{usage}_")
-                answer_text = "\n".join(answer_lines)
-            else:
-                answer_text = (
-                    "## Dataset inventory\n\n"
-                    "No named datasets or benchmarks were detected in the retrieved passages. "
-                    "Try a broader **Top K**, another mode, or add content whose passages mention benchmarks."
-                )
+            answer_text = self._build_datasets_answer(filtered)
         else:
-            context_parts = []
-            src_label = "Article" if self._content_library == "public" else "Paper"
-            corpus = "encyclopedia articles" if self._content_library == "public" else "research papers"
-            for i, item in enumerate(filtered):
-                metadata = item["metadata"]
-                context_parts.append(
-                    f"[Source {i + 1}] {src_label}: {metadata.get('title', 'Unknown')} | "
-                    f"Section: {metadata.get('section', 'body')} | "
-                    f"Page: {metadata.get('page_number', 0)}\n{item['content']}\n\n"
-                )
-            context = "".join(context_parts)
-
-            system_prompt = self._system_prompts().get(query_mode, self._system_prompts()["general"])
-            cite = "**Article title**" if self._content_library == "public" else "**Paper title**"
-            user_message = (
-                f"Context from {corpus}:\n\n{context}\n"
-                f"Question:\n{query}\n\n"
-                "Produce the full structured answer. Be thorough where the passages allow: multi-paragraph ### sections, "
-                "nested bullets, and a rich comparison table when in compare mode. "
-                f"Bold {cite} throughout. If a section has little evidence, keep it short and label the gap."
-            )
-            messages = [{"role": "system", "content": system_prompt}, {"role": "user", "content": user_message}]
-            temp = 0.1
-            if query_mode in ("general", "compare"):
-                temp = 0.28
-            elif query_mode in ("methodology", "reproduce"):
-                temp = 0.16
+            messages, temp = self._compose_chat_request(query, query_mode, filtered)
             answer_text = self.ollama_client.chat(messages, temperature=temp)
         if used_fallback and query_mode != "datasets":
             answer_text = f"{answer_text}\n\n*Retrieval: using best-matching passages (strict distance threshold not met).*"
 
-        return AnswerResponse(
+        return self._answer_response(
             answer=answer_text,
             sources=sources,
             confidence=confidence,
             has_answer=True,
             query=query,
             query_mode=query_mode,
-            model_used=self.settings.LLM_MODEL,
             chunks_searched=chunks_searched,
-            flare_enabled=flare_on,
-            flare_followup_retrieval=flare_follow_up,
-            retrieval_strategy=strategy,
+            flare_on=flare_on,
+            flare_follow_up=flare_follow_up,
+            strategy=strategy,
             retrieval_passes=retrieval_passes,
-            library=self._content_library,
         )

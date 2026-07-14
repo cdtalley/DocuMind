@@ -122,6 +122,38 @@ class FakeRagService:
             library="public",
         )
 
+    def answer_stream(
+        self,
+        query: str,
+        top_k: int,
+        query_mode: str = "general",
+        section_filter: str | None = None,
+        use_flare: bool = False,
+        retrieval_strategy: str = "baseline",
+        retrieve_only: bool = False,
+    ):
+        result = self.answer(
+            query,
+            top_k,
+            query_mode=query_mode,
+            section_filter=section_filter,
+            use_flare=use_flare,
+            retrieval_strategy=retrieval_strategy,
+            retrieve_only=retrieve_only,
+        )
+        payload = result.model_dump(mode="json")
+        if result.has_answer or result.sources:
+            yield {
+                "event": "retrieval",
+                "data": {
+                    **payload,
+                    "sources": payload.get("sources") or [],
+                },
+            }
+        if result.answer:
+            yield {"event": "token", "data": {"text": result.answer}}
+        yield {"event": "done", "data": payload}
+
 
 @dataclass
 class FakeEmbeddingRegistry:

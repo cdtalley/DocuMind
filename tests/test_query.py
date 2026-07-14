@@ -100,6 +100,30 @@ def test_query_retrieval_strategy_hyde_echo(client) -> None:
     assert body["answer"] == ""
 
 
+def test_query_stream_returns_sse_events(client) -> None:
+    ingest = client.post(
+        "/api/v1/ingest",
+        files={
+            "file": (
+                "stream_test.txt",
+                b"Streaming test document about transformers and retrieval augmented generation.",
+                "text/plain",
+            )
+        },
+    )
+    assert ingest.status_code == 200
+
+    with client.stream(
+        "POST",
+        "/api/v1/query/stream",
+        json={"query": "What is this about?", "top_k": 4, "query_mode": "general"},
+    ) as response:
+        assert response.status_code == 200
+        body = response.read().decode()
+        assert "event: retrieval" in body
+        assert "event: done" in body
+
+
 def test_arxiv_invalid_id(client) -> None:
     response = client.post("/api/v1/fetch-arxiv", json={"arxiv_id": "not-valid"})
     assert response.status_code == 400

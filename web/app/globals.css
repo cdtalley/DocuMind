@@ -897,6 +897,7 @@ button.btn-ghost:hover:not(:disabled) {
 
 .card-hero-head {
   display: flex;
+  flex-wrap: wrap;
   justify-content: space-between;
   align-items: flex-start;
   gap: 16px;
@@ -1372,6 +1373,80 @@ button.btn-compact {
 
 .flare-check input {
   margin-top: 3px;
+}
+
+.library-toggle {
+  display: inline-flex;
+  gap: 4px;
+  padding: 4px;
+  border-radius: 10px;
+  background: rgba(15, 23, 42, 0.6);
+  border: 1px solid var(--border);
+}
+
+.library-toggle__btn {
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  padding: 6px 14px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.library-toggle__btn--active {
+  background: var(--accent);
+  color: #0f172a;
+}
+
+.library-toggle__btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.quick-ask label {
+  font-weight: 600;
+  display: block;
+  margin-bottom: 8px;
+}
+
+.quick-ask__row {
+  display: flex;
+  gap: 10px;
+}
+
+.quick-ask__row input {
+  flex: 1;
+  min-width: 0;
+}
+
+.quick-ask__hint {
+  margin: 8px 0 0;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+}
+
+.query-status {
+  margin: 0 0 12px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: rgba(56, 189, 248, 0.08);
+  border: 1px solid rgba(56, 189, 248, 0.25);
+  color: #bae6fd;
+  font-size: 0.9rem;
+}
+
+.sources-first {
+  margin-bottom: 20px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--border);
+}
+
+.sources-first__hint {
+  margin: 0 0 12px;
+  font-size: 0.85rem;
+  color: var(--text-muted);
 }
 
 a {
